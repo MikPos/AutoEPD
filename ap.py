@@ -61,7 +61,8 @@ def decodeEdgeLabel(l):
 	elif l == "p(p(p(0)))":
 		bt = "#"
 	else:
-		raise ValueError("Can not convert edge term '%s' to a molecule." % l)
+		bt = None
+		# raise ValueError("Can not convert edge term '%s' to a molecule." % l)
 	return bt
 
 def graphFromTerm(g):
@@ -111,10 +112,11 @@ rules = {}  # due to a bug, the rules must be kept alive outside the DG
 def dgProject(dg, gMap, withEdges=True):
 	graphs = {}
 	for v in dg.vertices:
-		graphs[v.graph] = gMap(v.graph)
+		graph = gMap(v.graph)
+		if graph:
+			graphs[v.graph] = graph
 	dgNew = mod.DG(graphDatabase=[], labelSettings=lsString)
 	eMap = {}
-	print(graphs)
 	with dgNew.build() as b:
 		for e in dg.edges:
 			if not withEdges:
@@ -123,10 +125,11 @@ def dgProject(dg, gMap, withEdges=True):
 				d.right = [graphs[v.graph] for v in e.targets]
 			else:
 				_haxRuleStrings.clear()
-				print("e is:")
-				print(e)
+				# print("e is:")
+				# print(e)
 				mod.atomMapEvaluate(e, _haxAtomMapEvaluateToMakeRules) # Missing the AtomMapEvaluate function.
-				print("done with edge evaluation")
+				# print(_haxRuleStrings)
+				# print("done with edge evaluation")
 				rs = []
 				for s in _haxRuleStrings:
 					if s not in rules:
@@ -161,7 +164,7 @@ def allPartitions(molecule):
 
 def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None):
 	seen = set()
-	print("graphDatabase: " + str(graphDatabase))
+	# print("graphDatabase: " + str(graphDatabase))
 	def addSeenGraphs(gs):
 		t = tuple(sorted(gs, key=lambda g: g.id))
 		seen.add(t)
@@ -207,12 +210,6 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 								next_.append(gsNew)
 					else:
 						for r in rules:
-							if count == 0:
-								print(r)
-								for v in r.right.vertices:
-									print(v.stringLabel)
-									for e in v.incidentEdges:
-										print(e.stringLabel)
 							es = b.apply(gsSub, r)
 							for e in es:
 								isBad = False
@@ -228,15 +225,6 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 									continue
 
 								gsNew = [v.graph for v in e.targets] + gsOther
-								print("has not been seen")
-								print(gsNew)
-								if count < 1:
-									for g in gsNew:
-										for v in g.vertices:
-											print(v.stringLabel)
-											for e in v.incidentEdges:
-												print(e.stringLabel)
-									count += 1
 								if not hasBeenSeen(gsNew):
 									next_.append(gsNew)
 						addSeenGraphs(gsSub)
@@ -309,6 +297,7 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 
 	s = sum(a.numVertices for a in sources)
 	t = sum(a.numVertices for a in targets)
+	# print(f"s: {s}, t: {t}")
 	assert s == t
 	srcsUnique = set(sources)
 	tarsUnique = set(targets)
@@ -316,7 +305,6 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 		flow.addSource(a)
 		flow.addConstraint(mod.inFlow(a) >= sources.count(a))
 	for a in tarsUnique:
-		print(a)
 		flow.addSink(a)
 	obj = mod.FlowLinExp()
 	for e in dg.edges:
@@ -371,7 +359,7 @@ def printSolutions(*, ruleData, dgData, flowData):
 				g = v.graph
 				if not vVis(g, dgString): continue
 				for vGraph in g.vertices:
-					print(vGraph)
+					# print(vGraph)
 					label = "\\node[inner sep=1, at=(v-%d-0-v-%d.-20), anchor=160] {\\tiny $%.2f$};\n"
 					f.write(label % (v.id, vGraph.id, atomValString[g][str(vGraph.id)]))
 			f.write("\\end{tikzpicture}\n")
@@ -419,34 +407,98 @@ formDoubleBond = breakDoubleBond.makeInverse()
 # Potential New Rules: #
 ########################
 
-# pushPositiveCharge = ruleGMLString("""rule [
-# 	ruleID "pushPositiveCharge"
-# 	labelType "term"
-# 	left [
-# 		node [ id 0 label "a(_S0, 0)" ]
-# 		node [ id 1 label "a(_S1, 1)" ]
-# 		edge [ source 0 target 1 label "e(p(0))" ]
-# 	]
-# 	right [
-# 		node [ id 0 label "a(_S0, 1)" ]
-# 		node [ id 1 label "a(_S1, 0)" ]
+# Moving Positve Charge:
+formPositiveCharge = ruleGMLString("""rule [
+	ruleID "pushPositiveCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, 1)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, 1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
 		
-# 	]
-# ]""", add=False)
+	]
+]""", add=False)
+breakPositiveCharge = formPositiveCharge.makeInverse()
+formDoublePositiveCharge = ruleGMLString("""rule [
+	ruleID "pushDoublePositiveCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, 1)" ]
+		edge [ source 0 target 1 label "e(p(p(_E)))" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, 1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+		edge [ source 0 target 1 label "e(p(_E))" ]
+	]
+]""", add=False)
+breakDoublePositiveCharge = formDoublePositiveCharge.makeInverse()
 
-# pushNegativeCharge = ruleGMLString("""rule [
-# 	ruleID "pushNegativeCharge"
-# 	labelType "term"
-# 	left [
-# 		node [ id 0 label "a(_S0, 0)" ]
-# 		node [ id 1 label "a(_S1, -1)" ]
-# 	]
-# 	right [
-# 		node [ id 0 label "a(_S0, -1)" ]
-# 		node [ id 1 label "a(_S1, 0)" ]
-# 		edge [ source 0 target 1 label "e(p(0))" ]
-# 	]
-# ]""", add=False)
+# Moving Negative Charge:
+formNegativeCharge = ruleGMLString("""rule [
+	ruleID "formNegativeCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, -1)" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, -1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+	]
+]""", add=False)
+breakNegativeCharge = formNegativeCharge.makeInverse()
+formDoubleNegativeCharge = ruleGMLString("""rule [
+	ruleID "pushDoubleNegativeCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, -1)" ]
+		edge [ source 0 target 1 label "e(p(p(_E)))" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, -1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+		edge [ source 0 target 1 label "e(p(_E))" ]
+	]
+]""", add=False)
+breakDoubleNegativeCharge = formDoubleNegativeCharge.makeInverse()
+
+# Lone Electron Pairs used as nucleophile:
+oxygenLoneElectronPairs = ruleGMLString("""rule [
+	ruleID "oxygenLoneElectronPairs"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(O, 0)" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, -1)" ]
+		node [ id 1 label "a(O, 1)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+		
+	]
+]""", add=False)
+nitrogenLoneElectronPairs = ruleGMLString("""rule [
+	ruleID "nitrogenLoneElectronPairs"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(N, 0)" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, -1)" ]
+		node [ id 1 label "a(N, 1)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+		
+	]
+]""", add=False)
 
 def chargeSeparation():
 	class RuleData(object):
@@ -472,13 +524,18 @@ def chargeSeparation():
 				return val1 - val0
 			elif r in [formSingleBond, formDoubleBond]:
 				return -(val0 - val1)
-			elif r in [pushPositiveCharge, pushNegativeCharge]:
+			elif r in [formNegativeCharge, formDoubleNegativeCharge, breakNegativeCharge, breakDoubleNegativeCharge,
+				  	   formPositiveCharge, formDoublePositiveCharge, breakPositiveCharge, breakDoublePositiveCharge,
+					   oxygenLoneElectronPairs, nitrogenLoneElectronPairs]:
 				return 0.0
 			else:
 				assert False
 	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond, 
-				#   pushPositiveCharge, pushNegativeCharge])
-	])
+				#   pushPositiveCharge, pushNegativeCharge, pushDoublePositiveCharge, pushDoubleNegativeCharge,
+				  formNegativeCharge, formDoubleNegativeCharge, breakNegativeCharge, breakDoubleNegativeCharge,
+				  formPositiveCharge, formDoublePositiveCharge, breakPositiveCharge, breakDoublePositiveCharge,
+				  oxygenLoneElectronPairs, nitrogenLoneElectronPairs])
+	# ])
 
 
 # Haxed Functions:
