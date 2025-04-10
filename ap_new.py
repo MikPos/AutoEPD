@@ -74,36 +74,62 @@ def graphFromTerm(g):
 	s += "]\n"
 	return graphGMLString(s, name=g.name + ", string", add=False)
 
-
 _haxRuleStrings = set()
-def _haxAtomMapEvaluateToMakeRules(r, vMap):
+def _haxAtomMapEvaluateToMakeRules(vMap): # Where do we get the rules from?
 	left = ""
 	right = ""
-	for v in r.vertices:
-		vl, vr = vMap(v)
-		if not vl.isNull():
-			left  += '\t\tnode [ id %d label "%s" ]\n' % (v.id, decodeVertexLabel(vl.stringLabel))
+	# Vertices
+	for v in vMap.rule.vertices:
+		# Left side of rule
+		if not v.left:
+			continue
+		vG = vMap.match[v.left]
+		if not vG:
+			continue
+		vl = vG.vertex
+		left  += '\t\tnode [ id %d label "%s" ]\n' % (v.id, decodeVertexLabel(vl.stringLabel))
+		
+		# Rigth side of rule
+		if not v.right:
+			continue
+		vH = vMap.comatch[v.right]
+		if not vH:
+			continue
+		vr = vH.vertex
 		if not vr.isNull():
 			right += '\t\tnode [ id %d label "%s" ]\n' % (v.id, decodeVertexLabel(vr.stringLabel))
-	for e in r.edges:
-		vsl, vsr = vMap(e.source)
-		vtl, vtr = vMap(e.target)
-		if not e.left.isNull():
-			el = None
-			for eCand in vsl.incidentEdges:
-				if eCand.target == vtl:
-					el = eCand
-					break
-			assert el is not None
-			left += '\t\tedge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(el.stringLabel))
-		if not e.right.isNull():
-			er = None
-			for eCand in vsr.incidentEdges:
-				if eCand.target == vtr:
-					er = eCand
-					break
-			assert er is not None
-			right += '\t\tedge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(er.stringLabel))
+
+	# Edges
+	for e in vMap.rule.edges:
+		# Left side of edge
+		if not e.left:
+			continue
+		esG = vMap.match[e.left.source]
+		etG = vMap.match[e.left.target]
+		if not esG or not etG:
+			continue
+		el = None
+		for eCand in esG.incidentEdges:
+			if eCand.target == etG:
+				el = eCand
+				break
+		assert el is not None
+		left += '\t\tedge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(el.stringLabel))
+
+		# Right side of edge
+		if not e.right:
+			continue
+		esH = vMap.comatch[e.right.source]
+		etH = vMap.comatch[e.right.target]
+		if not esH or not etH:
+			continue
+		er = None
+		for eCand in esH.incidentEdges:
+			if eCand.target == etH:
+				er = eCand
+				break
+		assert er is not None
+		right += '\t\tedge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(er.stringLabel))
 	s = "rule [\n\tleft [\n%s\t]\n\tright [\n%s\t]\n]\n" % (left, right)
 	_haxRuleStrings.add(s)
 	return 0
@@ -127,7 +153,10 @@ def dgProject(dg, gMap, withEdges=True):
 				_haxRuleStrings.clear()
 				# print("e is:")
 				# print(e)
-				mod.atomMapEvaluate(e, _haxAtomMapEvaluateToMakeRules) # Missing the AtomMapEvaluate function.
+				# mod.atomMapEvaluate(e, _haxAtomMapEvaluateToMakeRules) # Missing the AtomMapEvaluate function.
+				vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
+				for vm in vms:
+					_haxAtomMapEvaluateToMakeRules(vm)
 				# print(_haxRuleStrings)
 				# print("done with edge evaluation")
 				rs = []
@@ -285,7 +314,7 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 		vals = mod.atomMapEvaluate(e, ruleData.eval)
 		valMap[e] = min(vals)
 
-	flow = mod.Flow(dg)
+	flow = mod.Flow(dg, ilpSolver="CPLEX")
 	for g in badMols:
 		flow.addConstraint(mod.vertex(g) == 0)
 	if maxNumSplits is not None:
@@ -364,7 +393,7 @@ def printSolutions(*, ruleData, dgData, flowData):
 					f.write(label % (v.id, vGraph.id, atomValString[g][str(vGraph.id)]))
 			f.write("\\end{tikzpicture}\n")
 			f.write("}%%\n")
-		mod.post("compileTikz \"%s\" \"%s\" 3" % (fName[:-4], fCoords[:-4]))
+		# mod.post("compileTikz \"%s\" \"%s\" 3" % (fName[:-4], fCoords[:-4]))
 		res.append(fName[:-3] + "pdf")
 	return res
 
@@ -499,6 +528,7 @@ nitrogenLoneElectronPairs = ruleGMLString("""rule [
 		
 	]
 ]""", add=False)
+inputRules = [formSingleBond, formDoubleBond, breakSingleBond, breakDoubleBond, formPositiveCharge, breakPositiveCharge, formDoublePositiveCharge, breakDoublePositiveCharge, formNegativeCharge, breakNegativeCharge, formDoubleNegativeCharge, breakDoubleNegativeCharge, nitrogenLoneElectronPairs, oxygenLoneElectronPairs]
 
 def chargeSeparation():
 	class RuleData(object):

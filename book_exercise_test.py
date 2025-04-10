@@ -1,4 +1,4 @@
-import ap
+import ap_new as ap
 import time
 import mod
 
@@ -38,18 +38,18 @@ overall_time_start = time.perf_counter()
 
 
 # Exercise B
-# exercise_2_start_1 = mod.smiles("C[NH-]")
-# exercise_2_start_2 = mod.smiles("CC(OC)=O")
-# exercise_2_end = mod.smiles("CNC(OC)(C)[O-]")
-# b_start_1 = ap.termFromGraph(exercise_2_start_1)
-# b_start_2 = ap.termFromGraph(exercise_2_start_2)
-# b_end = ap.termFromGraph(exercise_2_end)
-# nameSet = set([b_start_1, b_start_2, b_end])
-# sources = [b_start_1, b_start_2]
-# targets = [b_end]
-# timing_keyword = "Exercise B"
-# exercise_size_limit = 3
-# exercise_iteration_limit = 2
+exercise_2_start_1 = mod.smiles("C[NH-]")
+exercise_2_start_2 = mod.smiles("CC(OC)=O")
+exercise_2_end = mod.smiles("CNC(OC)(C)[O-]")
+b_start_1 = ap.termFromGraph(exercise_2_start_1)
+b_start_2 = ap.termFromGraph(exercise_2_start_2)
+b_end = ap.termFromGraph(exercise_2_end)
+nameSet = set([b_start_1, b_start_2, b_end])
+sources = [b_start_1, b_start_2]
+targets = [b_end]
+timing_keyword = "Exercise B"
+exercise_size_limit = 3
+exercise_iteration_limit = 2
 
 # Exercise C
 # exercise_3_start = mod.smiles("CNC(OC)(C)[O-]")
@@ -111,18 +111,18 @@ overall_time_start = time.perf_counter()
 
 
 # Exercise G
-exercise_7_start = mod.smiles("CC(C)(C)[OH2+]")
-exercise_7_end_1 = mod.smiles("C[C+](C)C")
-exercise_7_end_2 = mod.smiles("O")
-g_start = ap.termFromGraph(exercise_7_start)
-g_end_1 = ap.termFromGraph(exercise_7_end_1)
-g_end_2 = ap.termFromGraph(exercise_7_end_2)
-nameSet = set([g_start, g_end_1, g_end_2])
-sources = [g_start]
-targets = [g_end_1, g_end_2]
-timing_keyword = "Exercise G"
-exercise_size_limit = 2
-exercise_iteration_limit = 1
+# exercise_7_start = mod.smiles("CC(C)(C)[OH2+]")
+# exercise_7_end_1 = mod.smiles("C[C+](C)C")
+# exercise_7_end_2 = mod.smiles("O")
+# g_start = ap.termFromGraph(exercise_7_start)
+# g_end_1 = ap.termFromGraph(exercise_7_end_1)
+# g_end_2 = ap.termFromGraph(exercise_7_end_2)
+# nameSet = set([g_start, g_end_1, g_end_2])
+# sources = [g_start]
+# targets = [g_end_1, g_end_2]
+# timing_keyword = "Exercise G"
+# exercise_size_limit = 2
+# exercise_iteration_limit = 1
 
 # Exercise H
 # exercise_8_start_1 = mod.smiles("COC(=O)C(C(=O)OC)CCl")
@@ -149,8 +149,8 @@ exercise_iteration_limit = 1
 # sources = [m_start]
 # targets = [m_end]
 # timing_keyword = "Exercise M"
-# exercise_size_limit = 3
-# exercise_iteration_limit = 2
+# exercise_size_limit = 2
+# exercise_iteration_limit = 4
 
 # Exercise N
 # exercise_14_start = mod.smiles("C1C[C+]C(CCC=CCCC2=CCCCC2)CC1")
@@ -161,8 +161,8 @@ exercise_iteration_limit = 1
 # sources = [n_start]
 # targets = [n_end]
 # timing_keyword = "Exercise N"
-# exercise_size_limit = 3
-# exercise_iteration_limit = 2
+# exercise_size_limit = 1
+# exercise_iteration_limit = 3
 
 
 ####################

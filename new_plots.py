@@ -35,13 +35,13 @@ def plot_lists(lists):
     fig.set_figwidth(7)
     fig.set_figheight(4)
     ax1.set_xlabel("Exercise")
-    ax1.set_ylabel("Count", color="blue")
+    ax1.set_ylabel("Count", color="green")
     
     # Plot each list with a different color
-    ax1.plot(data_dict.keys(), lists[0], label=f"Graph Vertices", color = "blue")
-    ax1.plot(data_dict.keys(), lists[1], label=f"Graph Edges", color = "blue", linestyle = 'dotted')
-    # ax1.plot(data_dict.keys(), lists[2], label=f"Digraph Vertices", color = "green", linestyle = 'dashed')
-    # ax1.plot(data_dict.keys(), lists[3], label=f"Digraph Edges", color = "green", linestyle = 'dashdot')
+    # ax1.plot(data_dict.keys(), lists[0], label=f"Graph Vertices", color = "blue")
+    # ax1.plot(data_dict.keys(), lists[1], label=f"Graph Edges", color = "blue", linestyle = 'dotted')
+    ax1.plot(data_dict.keys(), lists[2], label=f"Digraph Vertices", color = "green", linestyle = 'dashed')
+    ax1.plot(data_dict.keys(), lists[3], label=f"Digraph Edges", color = "green", linestyle = 'dashdot')
 
     ax2 = ax1.twinx()  # instantiate a second Axes that shares the same x-axis
     ax2.set_ylabel("Seconds", color="red")
@@ -59,11 +59,11 @@ def plot_lists(lists):
     plt.grid(True)  # Enable grid for better readability
     plt.tight_layout()
     plt.show()  # Display the plot
-    plt.savefig("complexity_data.pdf")
+    plt.savefig("paper_data_2.pdf")
 
 
 # Example usage:
-file_path = 'timings_new.txt'  # Replace with the path to your file
+file_path = 'daniels_mod.txt'  # Replace with the path to your file
 data_dict = read_file_to_dict(file_path)
 lists = split_values_to_lists(data_dict)
 plot_lists(lists)
