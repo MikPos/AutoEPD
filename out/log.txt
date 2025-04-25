@@ -1,0 +1,9 @@
+Running Python Interpreter -----------------------------------------
+Executing code from 'book_exercise_test.py'
+['Gurobi', 'CPLEX', 'CBC-CLP']
+Iteration 1 on 1 source sets and 1 target sets
+Iteration 2 on 90 source sets and 94 target sets
+Projecting term DG to string DG (2871 vertices, 3608 edges).
+Projection done
+|V|: 2871
+|E|: 3608

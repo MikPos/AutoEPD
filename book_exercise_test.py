@@ -3,7 +3,7 @@ import time
 import mod
 
 timing_dictionary = {}
-with open("daniels_mod.txt", "r") as f:
+with open("bidirect.txt", "r") as f:
     for line in f:
         (key, value) = line.split(" : ")
         timing_dictionary[key] = value
@@ -38,18 +38,18 @@ overall_time_start = time.perf_counter()
 
 
 # Exercise B
-exercise_2_start_1 = mod.smiles("C[NH-]")
-exercise_2_start_2 = mod.smiles("CC(OC)=O")
-exercise_2_end = mod.smiles("CNC(OC)(C)[O-]")
-b_start_1 = ap.termFromGraph(exercise_2_start_1)
-b_start_2 = ap.termFromGraph(exercise_2_start_2)
-b_end = ap.termFromGraph(exercise_2_end)
-nameSet = set([b_start_1, b_start_2, b_end])
-sources = [b_start_1, b_start_2]
-targets = [b_end]
-timing_keyword = "Exercise B"
-exercise_size_limit = 3
-exercise_iteration_limit = 2
+# exercise_2_start_1 = mod.smiles("C[NH-]")
+# exercise_2_start_2 = mod.smiles("CC(OC)=O")
+# exercise_2_end = mod.smiles("CNC(OC)(C)[O-]")
+# b_start_1 = ap.termFromGraph(exercise_2_start_1)
+# b_start_2 = ap.termFromGraph(exercise_2_start_2)
+# b_end = ap.termFromGraph(exercise_2_end)
+# nameSet = set([b_start_1, b_start_2, b_end])
+# sources = [b_start_1, b_start_2]
+# targets = [b_end]
+# timing_keyword = "Exercise B"
+# exercise_size_limit = 3
+# exercise_iteration_limit = 2
 
 # Exercise C
 # exercise_3_start = mod.smiles("CNC(OC)(C)[O-]")
@@ -79,7 +79,7 @@ exercise_iteration_limit = 2
 # targets = [d_end_1, d_end_2]
 # timing_keyword = "Exercise D"
 # exercise_size_limit = 2
-# exercise_iteration_limit = 2
+# exercise_iteration_limit = 3
 
 # Exercise E
 # exercise_5_start_1 = mod.smiles("CC(O)[CH2-]")
@@ -149,20 +149,20 @@ exercise_iteration_limit = 2
 # sources = [m_start]
 # targets = [m_end]
 # timing_keyword = "Exercise M"
-# exercise_size_limit = 2
+# exercise_size_limit = 1
 # exercise_iteration_limit = 4
 
 # Exercise N
-# exercise_14_start = mod.smiles("C1C[C+]C(CCC=CCCC2=CCCCC2)CC1")
-# exercise_14_end = mod.smiles("C1CC2C(CC1)CCC3C2CC[C+]4C3CCCC4")
-# n_start = ap.termFromGraph(exercise_14_start)
-# n_end = ap.termFromGraph(exercise_14_end)
-# nameSet = set([n_start, n_end])
-# sources = [n_start]
-# targets = [n_end]
-# timing_keyword = "Exercise N"
-# exercise_size_limit = 1
-# exercise_iteration_limit = 3
+exercise_14_start = mod.smiles("C1C[C+]C(CCC=CCCC2=CCCCC2)CC1")
+exercise_14_end = mod.smiles("C1CC2C(CC1)CCC3C2CC[C+]4C3CCCC4")
+n_start = ap.termFromGraph(exercise_14_start)
+n_end = ap.termFromGraph(exercise_14_end)
+nameSet = set([n_start, n_end])
+sources = [n_start]
+targets = [n_end]
+timing_keyword = "Exercise N"
+exercise_size_limit = 1
+exercise_iteration_limit = 2
 
 
 ####################
@@ -194,6 +194,7 @@ dg_start_time = time.perf_counter()
 dgData = ap.makeDG(
     rules=ruleData.rules,
     sources=sources,
+    targets=targets,
     graphDatabase=mod.inputGraphs + sources + targets,
     sizeLimit=exercise_size_limit,
     iterationLimit=exercise_iteration_limit
@@ -254,7 +255,7 @@ exercise_timing_list.append(f"{molecule_vertices},{molecules_edges},{dgData.dg.n
 exercise_timing_string = "".join(exercise_timing_list)
 timing_dictionary[timing_keyword] = exercise_timing_string + "\n"
 
-file = open("daniels_mod.txt", "w")
+file = open("bidirect.txt", "w")
 
 for key, value in timing_dictionary.items():
     # print(f"{key}, {value}")

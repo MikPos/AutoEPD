@@ -1,0 +1,23 @@
+
+out/002_g_2170_10300100.pdf: out/001_g_2170_coord.tex out/002_g_2170_10300100.tex out/commonPreamble.fmt
+	mod_post --mode compileTikz "out/002_g_2170_10300100" "out/001_g_2170_coord" 1
+out/002_g_2170_10300100.svg: out/002_g_2170_10300100.pdf
+	mod_post --mode pdfToSvg "out/002_g_2170_10300100" "out/002_g_2170_10300100"
+out/004_g_2171_10300100.pdf: out/003_g_2171_coord.tex out/004_g_2171_10300100.tex out/commonPreamble.fmt
+	mod_post --mode compileTikz "out/004_g_2171_10300100" "out/003_g_2171_coord" 1
+out/004_g_2171_10300100.svg: out/004_g_2171_10300100.pdf
+	mod_post --mode pdfToSvg "out/004_g_2171_10300100" "out/004_g_2171_10300100"
+out/006_g_2226_10300100.pdf: out/005_g_2226_coord.tex out/006_g_2226_10300100.tex out/commonPreamble.fmt
+	mod_post --mode compileTikz "out/006_g_2226_10300100" "out/005_g_2226_coord" 1
+out/006_g_2226_10300100.svg: out/006_g_2226_10300100.pdf
+	mod_post --mode pdfToSvg "out/006_g_2226_10300100" "out/006_g_2226_10300100"
+out/008_g_2297_10300100.pdf: out/007_g_2297_coord.tex out/008_g_2297_10300100.tex out/commonPreamble.fmt
+	mod_post --mode compileTikz "out/008_g_2297_10300100" "out/007_g_2297_coord" 1
+out/008_g_2297_10300100.svg: out/008_g_2297_10300100.pdf
+	mod_post --mode pdfToSvg "out/008_g_2297_10300100" "out/008_g_2297_10300100"
+out/000_dg_1_11101_coord.tex: out/002_g_2170_10300100.svg out/004_g_2171_10300100.svg out/006_g_2226_10300100.svg out/008_g_2297_10300100.svg
+	mod_post --mode coordsFromGV dgHyper "out/000_dg_1_11101" 
+out/000_dg_1_11101.plain: out/000_dg_1_11101_coord.tex out/002_g_2170_10300100.svg out/004_g_2171_10300100.svg out/006_g_2226_10300100.svg out/008_g_2297_10300100.svg
+	mod_post --mode coordsFromGV dgHyper "out/000_dg_1_11101" 
+out/009_dg_1_11101.pdf: out/000_dg_1_11101_coord.tex out/009_dg_1_11101.tex out/commonPreamble.fmt
+	mod_post --mode compileTikz "out/009_dg_1_11101" "out/000_dg_1_11101_coord" 3

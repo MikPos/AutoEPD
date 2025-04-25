@@ -1,0 +1,2 @@
+\babel@toc {english}{}
+\contentsline {subsection}{\numberline {0.0.1}DG Hyper, \texttt {dg\_1}}{2}{subsection.0.0.1}%

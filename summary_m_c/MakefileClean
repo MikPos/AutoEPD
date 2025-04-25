@@ -1,0 +1,3 @@
+.PHONY: clean
+clean:
+	rm -f summary/{all.tex,summary.{aux,log,out,pdf,toc},master.tex} out/002_g_1355_10300100.{pdf,out,aux,log} out/002_g_1355_10300100.svg out/004_g_1391_10300100.{pdf,out,aux,log} out/004_g_1391_10300100.svg out/006_g_1392_10300100.{pdf,out,aux,log} out/006_g_1392_10300100.svg out/008_g_1418_10300100.{pdf,out,aux,log} out/008_g_1418_10300100.svg out/010_g_1434_10300100.{pdf,out,aux,log} out/010_g_1434_10300100.svg out/012_g_1495_10300100.{pdf,out,aux,log} out/012_g_1495_10300100.svg out/014_g_1551_10300100.{pdf,out,aux,log} out/014_g_1551_10300100.svg out/000_dg_1_11101.plain out/000_dg_1_11101_coord.tex out/015_dg_1_11101.{pdf,out,aux,log} out/0_0_aux.{pdf,out,aux,log}
