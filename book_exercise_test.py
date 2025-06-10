@@ -1,9 +1,10 @@
 import ap_new as ap
 import time
+import itertools
 import mod
 
 timing_dictionary = {}
-with open("bidirect.txt", "r") as f:
+with open("networkx.txt", "r") as f:
     for line in f:
         (key, value) = line.split(" : ")
         timing_dictionary[key] = value
@@ -34,7 +35,7 @@ overall_time_start = time.perf_counter()
 # targets = [a_end_1, a_end_2]
 # timing_keyword = "Exercise A"
 # exercise_size_limit = 3
-# exercise_iteration_limit = 2
+# exercise_iteration_limit = 1
 
 
 # Exercise B
@@ -49,7 +50,7 @@ overall_time_start = time.perf_counter()
 # targets = [b_end]
 # timing_keyword = "Exercise B"
 # exercise_size_limit = 3
-# exercise_iteration_limit = 2
+# exercise_iteration_limit = 1
 
 # Exercise C
 # exercise_3_start = mod.smiles("CNC(OC)(C)[O-]")
@@ -63,7 +64,7 @@ overall_time_start = time.perf_counter()
 # targets = [c_end_1, c_end_2]
 # timing_keyword = "Exercise C"
 # exercise_size_limit = 2
-# exercise_iteration_limit = 2
+# exercise_iteration_limit = 1
 
 # Exercise D
 # exercise_4_start_1 = mod.smiles("CN", "ds1")
@@ -150,7 +151,7 @@ overall_time_start = time.perf_counter()
 # targets = [m_end]
 # timing_keyword = "Exercise M"
 # exercise_size_limit = 1
-# exercise_iteration_limit = 4
+# exercise_iteration_limit = 3
 
 # Exercise N
 exercise_14_start = mod.smiles("C1C[C+]C(CCC=CCCC2=CCCCC2)CC1")
@@ -161,8 +162,8 @@ nameSet = set([n_start, n_end])
 sources = [n_start]
 targets = [n_end]
 timing_keyword = "Exercise N"
-exercise_size_limit = 1
-exercise_iteration_limit = 2
+# exercise_size_limit = 1
+# exercise_iteration_limit = 2
 
 
 ####################
@@ -191,13 +192,13 @@ ruleData = ap.chargeSeparation()
 # Testing Runtime of Constructing DG:
 dg_start_time = time.perf_counter()
 
-dgData = ap.makeDG(
+dgData, nxPath = ap.makeDG(
     rules=ruleData.rules,
     sources=sources,
     targets=targets,
     graphDatabase=mod.inputGraphs + sources + targets,
-    sizeLimit=exercise_size_limit,
-    iterationLimit=exercise_iteration_limit
+    sizeLimit=1,
+    iterationLimit=3
     )
 
 dg_stop_time = time.perf_counter()
@@ -216,6 +217,9 @@ for v in dgData.dgString.vertices:
     if v.graph.numVertices == v.graph.numEdges: continue
 
 
+allowed_graphs = list(itertools.chain(*nxPath))
+print(allowed_graphs)
+
 # Test runtime of partial charges:
 ruleData.atomVals = ap.loadPartialCharges(dgData)
 
@@ -224,10 +228,15 @@ flow_start_time = time.perf_counter()
 
 flowData = ap.calcPathways(
     ruleData=ruleData, dgData=dgData,
-    sources=sources, targets=targets
+    sources=sources, targets=targets,
+    pathGraphs=allowed_graphs
 )
 flow = flowData.flow
 flow.addEnumerationVar(mod.isEdgeUsed)
+
+# for graph in dgData.dgString.vertices:
+# 		if graph not in allowed_graphs:
+# 			flow.exclude(graph)
 
 flow.findSolutions(verbosity=1, maxNumSolutions=1)
 flow.solutions.list()
@@ -255,7 +264,7 @@ exercise_timing_list.append(f"{molecule_vertices},{molecules_edges},{dgData.dg.n
 exercise_timing_string = "".join(exercise_timing_list)
 timing_dictionary[timing_keyword] = exercise_timing_string + "\n"
 
-file = open("bidirect.txt", "w")
+file = open("networkx.txt", "w")
 
 for key, value in timing_dictionary.items():
     # print(f"{key}, {value}")

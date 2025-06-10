@@ -1,9 +1,7 @@
 Running Python Interpreter -----------------------------------------
 Executing code from 'book_exercise_test.py'
 ['Gurobi', 'CPLEX', 'CBC-CLP']
+['breakSingleBond'(0), 'breakSingleBond, inverse'(1), 'breakDoubleBond'(2), 'breakDoubleBond, inverse'(3), 'formNegativeCharge'(8), 'pushDoubleNegativeCharge'(10), 'formNegativeCharge, inverse'(9), 'pushDoubleNegativeCharge, inverse'(11), 'pushPositiveCharge'(4), 'pushDoublePositiveCharge'(6), 'pushPositiveCharge, inverse'(5), 'pushDoublePositiveCharge, inverse'(7), 'oxygenLoneElectronPairs'(12), 'nitrogenLoneElectronPairs'(13)]
 Iteration 1 on 1 source sets and 1 target sets
-Iteration 2 on 90 source sets and 94 target sets
-Projecting term DG to string DG (2871 vertices, 3608 edges).
-Projection done
-|V|: 2871
-|E|: 3608
+Iteration 2 on 123 source sets and 124 target sets
+Iteration 3 on 7080 source sets and 9473 target sets

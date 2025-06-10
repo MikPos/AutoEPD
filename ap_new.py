@@ -1,6 +1,7 @@
 import itertools
 import subprocess
 import random
+import networkx
 import mod
 from mod import LabelSettings, LabelType, LabelRelation, BondType, ruleGMLString, graphGMLString
 
@@ -74,7 +75,6 @@ def graphFromTerm(g):
 	s += "]\n"
 	return graphGMLString(s, name=g.name + ", string", add=False)
 
-_haxRuleStrings = set()
 def _haxAtomMapEvaluateToMakeRules(vMap):
 	left = ""
 	right = ""
@@ -131,12 +131,12 @@ def _haxAtomMapEvaluateToMakeRules(vMap):
 		assert er is not None
 		right += '\t\tedge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(er.stringLabel))
 	s = "rule [\n\tleft [\n%s\t]\n\tright [\n%s\t]\n]\n" % (left, right)
-	_haxRuleStrings.add(s)
-	return 0
+	return s
 
 rules = {}  # due to a bug, the rules must be kept alive outside the DG
-def dgProject(dg, gMap, withEdges=True):
+def dgProject(dg, gMap, path, withEdges=True): # Why are we even doing this? Atom Maps?
 	graphs = {}
+	rule_strings = set()
 	for v in dg.vertices:
 		graph = gMap(v.graph)
 		if graph:
@@ -150,21 +150,21 @@ def dgProject(dg, gMap, withEdges=True):
 				d.left = [graphs[v.graph] for v in e.sources]
 				d.right = [graphs[v.graph] for v in e.targets]
 			else:
-				_haxRuleStrings.clear()
+				rule_strings.clear()
 				vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
 				for vm in vms:
-					_haxAtomMapEvaluateToMakeRules(vm)
+					rule_strings.add(_haxAtomMapEvaluateToMakeRules(vm))
 				rs = []
-				for s in _haxRuleStrings:
+				for s in rule_strings:
 					if s not in rules:
 						rules[s] = ruleGMLString(s, add=False)
 					rs.append(rules[s])
-				for r in rs:
+				for r in rs: #WHY??????
 					d = mod.Derivation()
 					d.left = [graphs[v.graph] for v in e.sources]
 					d.right = [graphs[v.graph] for v in e.targets]
 					d.rule = r
-			eNew = b.addDerivation(d)
+			eNew = b.addDerivation(d) ## <- This is always just the last rule found
 			eMap[eNew] = e
 	graphMap = {}
 	for old, new in graphs.items():
@@ -185,26 +185,17 @@ def allPartitions(molecule):
 		component2.pop()
 	yield from split(molecule, 0, [], [])
 
-def computeNextIteration(prev, rules, build, dg, sizeLimit, seen):
+
+
+def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction, digraph):
 	result = []
 	def addSeenGraphs(gs):
 		t = tuple(sorted(gs, key=lambda g: g.id))
 		seen.add(t)
 	def hasBeenSeen(gs):
-		t = tuple(sorted(gs, key=lambda g: g.id))
+		t = tuple(sorted(gs, key=lambda g: g.id)) # This meeses with the comparison of the states.... They are not the same order when they are bidirectional.
 		return t in seen
 	for gs in prev:
-		# def makePretty(a):
-		# 	s = a.graphDFS
-		# 	s = s.replace("{e(p(0))}", "")
-		# 	s = s.replace("{e(p(p(0)))}", "=")
-		# 	s = s.replace("[a(C, 0)]", "C")
-		# 	s = s.replace("[a(C, 1)]", "[C+]")
-		# 	s = s.replace("[a(C, -1)]", "[C-]")
-		# 	s = s.replace("[a(O, 0)]", "O")
-		# 	s = s.replace("[a(O, 1)]", "[O+]")
-		# 	s = s.replace("[a(O, -1)]", "[O-]")
-		# 	return s
 		if hasBeenSeen(gs):
 			continue
 		if sizeLimit is not None and len(gs) > sizeLimit:
@@ -215,6 +206,11 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen):
 			if hasBeenSeen(gsSub):
 				for e in getOutEdges(dg, gsSub):
 					gsNew = [v.graph for v in e.targets] + gsOther
+					# Should we even add it here?
+					# if direction == "forward":
+					# 	digraph.add_edge(tuple(sorted(gs, key=lambda g: g.id)), tuple(sorted(gsNew, key=lambda g: g.id)))
+					# else:
+					# 	digraph.add_edge(tuple(sorted(gsNew, key=lambda g: g.id)), tuple(sorted(gs, key=lambda g: g.id)))
 					if not hasBeenSeen(gsNew):
 						result.append(gsNew)
 			else:
@@ -233,6 +229,12 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen):
 						if isBad:
 							continue
 						gsNew = [v.graph for v in e.targets] + gsOther
+						if direction == "forward":
+							digraph.add_edge(tuple(sorted(gs, key=lambda g: g.id)), tuple(sorted(gsNew, key=lambda g: g.id)))
+						else:
+							inverseRule = ruleDB[r.id]
+							build.apply(gsNew, inverseRule) # Add Inverse Rule
+							digraph.add_edge(tuple(sorted(gsNew, key=lambda g: g.id)), tuple(sorted(gs, key=lambda g: g.id)))
 						if not hasBeenSeen(gsNew):
 							result.append(gsNew)
 				addSeenGraphs(gsSub)
@@ -240,39 +242,33 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen):
 	return result
 
 
+
 def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None):
-	seen_sources = set()
-	seen_targets = set()
-	# print("graphDatabase: " + str(graphDatabase))
-	# def overlapInSeenGraphs():
-	# 	result = False
-	# 	print(len(seen_sources))
-	# 	print(len(seen_targets))
-	# 	for g in seen_sources:
-	# 		for h in seen_targets:
-	# 			if g.isomorphism(h):
-	# 				result = True
-	# 				break
-		# return result
+	nGraph = networkx.DiGraph() # This is fine.
+	seen = set()
+	print(rules)
 	dg = mod.DG(graphDatabase=graphDatabase, labelSettings=ls)
 	with dg.build() as b:
 		prev_sources = [sources]
 		prev_targets = [targets]
+		nGraph.add_node(tuple(sorted(sources, key=lambda g: g.id))) # Not ideal way to add them.
+		nGraph.add_node(tuple(sorted(targets, key=lambda g: g.id)))
 		iteration = 0
 		while len(prev_sources) > 0 or len(prev_targets) > 0:
 			iteration += 1
-			# if seen_sources & seen_targets:
-			# 	print(seen_sources & seen_targets)
 			if iterationLimit is not None and iteration > iterationLimit: # Should be changed so it exits at an overlap in seen_sources and seen_targets.
 				break
 			print("Iteration %d on %d source sets and %d target sets" % (iteration, len(prev_sources), len(prev_targets)))
-			next_sources = computeNextIteration(prev_sources, rules, b, dg, sizeLimit, seen_sources)
+			next_sources = computeNextIteration(prev_sources, rules, b, dg, sizeLimit, seen, "forward", nGraph)
 			prev_sources = next_sources
-			next_targets = computeNextIteration(prev_targets, rules, b, dg, sizeLimit, seen_targets)
+			next_targets = computeNextIteration(prev_targets, rules, b, dg, sizeLimit, seen, "reverse", nGraph)
 			prev_targets = next_targets
 
+	path = networkx.dijkstra_path(nGraph, source=tuple(sorted(sources, key=lambda g: g.id)), target=tuple(sorted(targets, key=lambda g: g.id)))
+	print(path)
+
 	print("Projecting term DG to string DG (%d vertices, %d edges)." % (dg.numVertices, dg.numEdges))
-	dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, withEdgeProjection)
+	dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, path, withEdgeProjection)
 	print("Projection done")
 	class DGData(object):
 		pass
@@ -281,7 +277,8 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 	res.dgString = dgString
 	res.graphMap = graphMap
 	res.edgeMap = edgeMap
-	return res
+	
+	return res, path
 
 #############################
 # Loads the partial charges #
@@ -315,14 +312,18 @@ def loadPartialCharges(dgData):
 
 
 
-def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
+def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None, pathGraphs):
 	dg = dgData.dg
 	valLowerBound = ruleData.atomVals.lowerBound
 	valScale = ruleData.atomVals.scale
 
+	print("I am here!")
 	valMap = {}
 	for e in dg.edges:
-		vals = mod.atomMapEvaluate(e, ruleData.eval)
+		vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
+		vals = []
+		for vm in vms:
+			vals.append(ruleData.eval(vm.rule ,vm))
 		valMap[e] = min(vals)
 
 	flow = mod.Flow(dg, ilpSolver="CPLEX")
@@ -334,6 +335,10 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 			if e.numTargets > 1:
 				expr += mod.isEdgeUsed[e]
 		flow.addConstraint(expr <= maxNumSplits)
+	
+	for vertex in dg.vertices:
+		if vertex.graph not in pathGraphs:
+			flow.exclude(vertex)
 
 	s = sum(a.numVertices for a in sources)
 	t = sum(a.numVertices for a in targets)
@@ -525,6 +530,7 @@ oxygenLoneElectronPairs = ruleGMLString("""rule [
 
 	]
 ]""", add=False)
+# reverseOxygenElectronPairs = oxygenLoneElectronPairs.makeInverse()
 nitrogenLoneElectronPairs = ruleGMLString("""rule [
 	ruleID "nitrogenLoneElectronPairs"
 	labelType "term"
@@ -539,6 +545,24 @@ nitrogenLoneElectronPairs = ruleGMLString("""rule [
 
 	]
 ]""", add=False)
+# reverseNitrogenElectronPairs = nitrogenLoneElectronPairs.makeInverse()
+
+ruleDB = {
+	formNegativeCharge.id: breakNegativeCharge,
+	breakNegativeCharge.id: formNegativeCharge,
+	formDoubleNegativeCharge.id: breakDoubleNegativeCharge,
+	breakDoubleNegativeCharge.id: formDoubleNegativeCharge,
+	formPositiveCharge.id: breakPositiveCharge,
+	breakPositiveCharge.id: formPositiveCharge,
+	formDoublePositiveCharge.id: breakDoublePositiveCharge,
+	breakDoublePositiveCharge.id: formDoublePositiveCharge,
+	formSingleBond.id: breakSingleBond,
+	breakSingleBond.id: formSingleBond,
+	formDoubleBond.id: breakDoubleBond,
+	breakDoubleBond.id: formDoubleBond,
+	nitrogenLoneElectronPairs.id: breakSingleBond,
+	oxygenLoneElectronPairs.id: breakSingleBond
+}
 
 def chargeSeparation():
 	class RuleData(object):
@@ -554,8 +578,13 @@ def chargeSeparation():
 				assert a.stringLabel[:4] == b.stringLabel[:4]
 			v0 = r.getVertexFromExternalId(0)
 			v1 = r.getVertexFromExternalId(1)
-			v0l, v0r = vMap(v0)
-			v1l, v1r = vMap(v1)
+			# Make similar to _haxAtomMapEvaluate...
+			v0l = vMap.match[v0.left].vertex
+			v0r = vMap.comatch[v0.right].vertex
+			v1l = vMap.match[v1.left].vertex
+			v1r = vMap.comatch[v1.right].vertex
+			# v0l, v0r = vMap(v0)
+			# v1l, v1r = vMap(v1)
 			check(v0l, v0r)
 			check(v1l, v1r)
 			val0 = atomVal[v0l.graph][v0l]
@@ -572,9 +601,9 @@ def chargeSeparation():
 				assert False
 	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond,
 				#   pushPositiveCharge, pushNegativeCharge, pushDoublePositiveCharge, pushDoubleNegativeCharge,
-				#   formNegativeCharge, formDoubleNegativeCharge, breakNegativeCharge, breakDoubleNegativeCharge,
-				#   formPositiveCharge, formDoublePositiveCharge, breakPositiveCharge, breakDoublePositiveCharge,
-				#   oxygenLoneElectronPairs, nitrogenLoneElectronPairs])
+				  formNegativeCharge, formDoubleNegativeCharge, breakNegativeCharge, breakDoubleNegativeCharge,
+				  formPositiveCharge, formDoublePositiveCharge, breakPositiveCharge, breakDoublePositiveCharge,
+				  oxygenLoneElectronPairs, nitrogenLoneElectronPairs
 	])
 
 
