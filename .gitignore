@@ -1,0 +1,9 @@
+out/
+summary*/
+long_klaus*/
+one_directional_results/
+Old Results/
+networkx*/
+*.txt
+*.pdf
+__pycache__
