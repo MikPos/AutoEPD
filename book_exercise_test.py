@@ -3,8 +3,12 @@ import time
 import itertools
 import mod
 
+SIZE_LIMIT = 3
+ITERATION_LIMIT = 2
+FILE_NAME = "networkx.txt"
+
 timing_dictionary = {}
-with open("networkx.txt", "r") as f:
+with open(FILE_NAME, "r") as f:
     for line in f:
         (key, value) = line.split(" : ")
         timing_dictionary[key] = value
@@ -34,8 +38,6 @@ overall_time_start = time.perf_counter()
 # sources = [a_start_1, a_start_2]
 # targets = [a_end_1, a_end_2]
 # timing_keyword = "Exercise A"
-# exercise_size_limit = 3
-# exercise_iteration_limit = 1
 
 
 # Exercise B
@@ -49,8 +51,6 @@ overall_time_start = time.perf_counter()
 # sources = [b_start_1, b_start_2]
 # targets = [b_end]
 # timing_keyword = "Exercise B"
-# exercise_size_limit = 3
-# exercise_iteration_limit = 1
 
 # Exercise C
 # exercise_3_start = mod.smiles("CNC(OC)(C)[O-]")
@@ -63,8 +63,6 @@ overall_time_start = time.perf_counter()
 # sources = [c_start]
 # targets = [c_end_1, c_end_2]
 # timing_keyword = "Exercise C"
-# exercise_size_limit = 2
-# exercise_iteration_limit = 1
 
 # Exercise D
 # exercise_4_start_1 = mod.smiles("CN", "ds1")
@@ -79,8 +77,6 @@ overall_time_start = time.perf_counter()
 # sources = [d_start_1, d_start_2]
 # targets = [d_end_1, d_end_2]
 # timing_keyword = "Exercise D"
-# exercise_size_limit = 2
-# exercise_iteration_limit = 3
 
 # Exercise E
 # exercise_5_start_1 = mod.smiles("CC(O)[CH2-]")
@@ -93,8 +89,6 @@ overall_time_start = time.perf_counter()
 # sources = [e_start_1, e_start_2]
 # targets = [e_end]
 # timing_keyword = "Exercise E"
-# exercise_size_limit = 2
-# exercise_iteration_limit = 2
 
 # Exercise F
 # exercise_6_start_1 = mod.smiles("CC(C)(C)O", "f start 1")
@@ -107,8 +101,6 @@ overall_time_start = time.perf_counter()
 # sources = [f_start_1, f_start_2]
 # targets = [f_end]
 # timing_keyword = "Exercise F"
-# exercise_size_limit = 2
-# exercise_iteration_limit = 1
 
 
 # Exercise G
@@ -122,8 +114,6 @@ overall_time_start = time.perf_counter()
 # sources = [g_start]
 # targets = [g_end_1, g_end_2]
 # timing_keyword = "Exercise G"
-# exercise_size_limit = 2
-# exercise_iteration_limit = 1
 
 # Exercise H
 # exercise_8_start_1 = mod.smiles("COC(=O)C(C(=O)OC)CCl")
@@ -138,8 +128,6 @@ overall_time_start = time.perf_counter()
 # sources = [h_start_1, h_start_2]
 # targets = [h_end_1, h_end_2]
 # timing_keyword = "Exercise H"
-# exercise_size_limit = 2
-# exercise_iteration_limit = 2
 
 # Exercise M
 # exercise_13_start = mod.smiles("COC(=C)OCC=C")
@@ -150,11 +138,9 @@ overall_time_start = time.perf_counter()
 # sources = [m_start]
 # targets = [m_end]
 # timing_keyword = "Exercise M"
-# exercise_size_limit = 1
-# exercise_iteration_limit = 3
 
 # Exercise N
-exercise_14_start = mod.smiles("C1C[C+]C(CCC=CCCC2=CCCCC2)CC1")
+exercise_14_start = mod.smiles("C1C[CH+]C(CCC=CCCC2=CCCCC2)CC1")
 exercise_14_end = mod.smiles("C1CC2C(CC1)CCC3C2CC[C+]4C3CCCC4")
 n_start = ap.termFromGraph(exercise_14_start)
 n_end = ap.termFromGraph(exercise_14_end)
@@ -162,8 +148,6 @@ nameSet = set([n_start, n_end])
 sources = [n_start]
 targets = [n_end]
 timing_keyword = "Exercise N"
-# exercise_size_limit = 1
-# exercise_iteration_limit = 2
 
 
 ####################
@@ -192,13 +176,14 @@ ruleData = ap.chargeSeparation()
 # Testing Runtime of Constructing DG:
 dg_start_time = time.perf_counter()
 
-dgData, nxPath = ap.makeDG(
+# dgData, nxPath = ap.makeDG(
+dgData = ap.makeDG(
     rules=ruleData.rules,
     sources=sources,
     targets=targets,
     graphDatabase=mod.inputGraphs + sources + targets,
-    sizeLimit=1,
-    iterationLimit=3
+    sizeLimit=SIZE_LIMIT,
+    iterationLimit=ITERATION_LIMIT
     )
 
 dg_stop_time = time.perf_counter()
@@ -217,8 +202,8 @@ for v in dgData.dgString.vertices:
     if v.graph.numVertices == v.graph.numEdges: continue
 
 
-allowed_graphs = list(itertools.chain(*nxPath))
-print(allowed_graphs)
+# allowed_graphs = list(itertools.chain(*nxPath))
+# print(allowed_graphs)
 
 # Test runtime of partial charges:
 ruleData.atomVals = ap.loadPartialCharges(dgData)
@@ -229,15 +214,12 @@ flow_start_time = time.perf_counter()
 flowData = ap.calcPathways(
     ruleData=ruleData, dgData=dgData,
     sources=sources, targets=targets,
-    pathGraphs=allowed_graphs
+    # pathGraphs=allowed_graphs
 )
 flow = flowData.flow
 flow.addEnumerationVar(mod.isEdgeUsed)
 
-# for graph in dgData.dgString.vertices:
-# 		if graph not in allowed_graphs:
-# 			flow.exclude(graph)
-
+# Why does it keep being shit?
 flow.findSolutions(verbosity=1, maxNumSolutions=1)
 flow.solutions.list()
 
@@ -249,6 +231,22 @@ files = ap.printSolutions(ruleData=ruleData, dgData=dgData, flowData=flowData)
 for f in files:
     print("DG:", f)
 
+# for sol in flow.solutions:
+#     sol.print()
+# p = mod.GraphPrinter()
+# usedGraphs = []
+# for solution in flow.solutions:
+#     for e in dgData.dg.edges:
+#         if solution.eval(edge[e]) != 0:
+#             for rule in e.rules:
+#                 rule.print(p)
+            # vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
+            # for vm in vms:
+# for g in usedGraphs:
+#     print(g)
+
+
+# print(ap.rules)
 # Compute the runtime:
 overall_time = overall_time_stop - overall_time_start
 dg_time = dg_stop_time - dg_start_time
@@ -264,7 +262,7 @@ exercise_timing_list.append(f"{molecule_vertices},{molecules_edges},{dgData.dg.n
 exercise_timing_string = "".join(exercise_timing_list)
 timing_dictionary[timing_keyword] = exercise_timing_string + "\n"
 
-file = open("networkx.txt", "w")
+file = open(FILE_NAME, "w")
 
 for key, value in timing_dictionary.items():
     # print(f"{key}, {value}")

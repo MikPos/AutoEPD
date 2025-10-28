@@ -66,5 +66,5 @@ if "LD_PRELOAD" in os.environ and "valgrind" in os.environ["LD_PRELOAD"]:
 	_initialGlobals = set(globals())
 # From command line arguments
 _modWrapperScriptQuiet = False
-include("book_exercise_test.py")
+include("non_daniel_test.py")
 # PYTHONPATH=::/usr/local/lib:/workdir
