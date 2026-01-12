@@ -4,8 +4,8 @@ import random
 import mod
 from mod import LabelSettings, LabelType, LabelRelation, BondType, ruleGMLString, graphGMLString
 
-ls = LabelSettings(LabelType.Term, LabelRelation.Unification)
-lsString = LabelSettings(LabelType.String, LabelRelation.Unification)
+ls = LabelSettings(LabelType.Term, LabelRelation.Specialisation)
+lsString = LabelSettings(LabelType.String, LabelRelation.Specialisation)
 
 termBondFromBondType = {
 	BondType.Invalid: "__error1",
