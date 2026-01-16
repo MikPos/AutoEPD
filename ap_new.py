@@ -15,14 +15,14 @@ termBondFromBondType = {
 	BondType.Aromatic: "__error2"
 }
 
-cycle3 = mod.graphDFS("[*]1{*}[*]{*}[*]{*}1")
-cycle4 = mod.graphDFS("[*]1{*}[*]{*}[*]{*}[*]{*}1")
+cycle3 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}1")
+cycle4 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}[*]{*}1")
 badList = [cycle3, cycle4]
 for i in [-1, 1]:
 	break
-	g = mod.graphDFS("[a(_a1, %d)]{*}[a(_a2, %d)]" % (i, i))
+	g = mod.Graph.fromDFS("[a(_a1, %d)]{*}[a(_a2, %d)]" % (i, i))
 	badList.append(g)
-doubleDouble = mod.graphDFS("[*]{e(p(p(0)))}[*]{e(p(p(0)))}[*]")
+doubleDouble = mod.Graph.fromDFS("[*]{e(p(p(0)))}[*]{e(p(p(0)))}[*]")
 badList.append(doubleDouble)
 badMols = set()
 
@@ -34,7 +34,7 @@ def termFromGraph(g):
 	for e in g.edges:
 		s += 'edge [ source %d target %d label "e(%s)" ]' % (e.source.id, e.target.id, termBondFromBondType[e.bondType])
 	s +="]\n"
-	return graphGMLString(s, name=g.name + ", term", add=False)
+	return mod.Graph.fromGMLString(s, name=g.name + ", term", add=False)
 
 def decodeVertexLabel(l):
 	assert l.startswith("a(")
@@ -72,7 +72,7 @@ def graphFromTerm(g):
 	for e in g.edges:
 		s += 'edge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(e.stringLabel))
 	s += "]\n"
-	return graphGMLString(s, name=g.name + ", string", add=False)
+	return mod.Graph.fromGMLString(s, name=g.name + ", string", add=False)
 
 def _haxAtomMapEvaluateToMakeRules(vMap):
 	left = ""
@@ -157,7 +157,7 @@ def dgProject(dg, gMap, withEdges=True): # Why are we even doing this? Atom Maps
 				rs = []
 				for s in rule_strings:
 					if s not in rules:
-						rules[s] = ruleGMLString(s, add=False)
+						rules[s] = mod.Rule.fromGMLString(s, add=False)
 					rs.append(rules[s])
 				for r in rs: #WHY??????
 					d = mod.Derivation()
@@ -344,9 +344,9 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 			vals.append(ruleData.eval(vm.rule ,vm))
 		valMap[e] = min(vals)
 
-	flow = mod.Flow(dg, ilpSolver="CPLEX")
+	flow = mod.hyperflow.Model(dg, ilpSolver="CPLEX")
 	for g in badMols:
-		flow.addConstraint(mod.vertex(g) == 0)
+		flow.addConstraint(mod.vertex[g] == 0)
 	if maxNumSplits is not None:
 		expr = mod.FlowLinExp()
 		for e in dg.edges:
@@ -366,13 +366,13 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 	tarsUnique = set(targets)
 	for a in srcsUnique:
 		flow.addSource(a)
-		flow.addConstraint(mod.inFlow(a) >= sources.count(a))
+		flow.addConstraint(mod.inFlow[a] >= sources.count(a))
 	for a in tarsUnique:
 		flow.addSink(a)
-	obj = mod.FlowLinExp()
+	obj = mod.hyperflow.LinExp()
 	for e in dg.edges:
 		if not e.inverse.isNull():
-			flow.addConstraint(mod.isBothReverseUsed(e) == 0)
+			flow.addConstraint(mod.isBothReverseUsed[e] == 0)
 		m = valMap[e] + valLowerBound
 		m *= valScale
 		assert m >= 0
@@ -406,10 +406,10 @@ def printSolutions(*, ruleData, dgData, flowData):
 		pGraph.collapseHydrogens = False
 		pGraph.simpleCarbons = False
 		p.withInlineGraphs = True
-		vVis = lambda g, dg: s.eval(mod.vertex(graphMap[g])) != 0
+		vVis = lambda v: s.eval(mod.vertex[graphMap[v.graph]]) != 0
 		p.pushEdgeLabel(lambda e: ", ".join(r.name for r in edgeMap[e].rules))
 		p.pushVertexVisible(vVis)
-		p.pushEdgeVisible(lambda e: s.eval(mod.edge(edgeMap[e])) != 0)
+		p.pushEdgeVisible(lambda e: s.eval(mod.edgeFlow[edgeMap[e]]) != 0)
 		p.pushEdgeLabel(lambda e: "%.2f" % valMap[edgeMap[e]])
 		fDG, fCoords = dgString.print(p)
 
@@ -420,7 +420,7 @@ def printSolutions(*, ruleData, dgData, flowData):
 			f.write("\\begin{tikzpicture}[remember picture, overlay]\n")
 			for v in dgString.vertices:
 				g = v.graph
-				if not vVis(g, dgString): continue
+				if not vVis(v): continue
 				for vGraph in g.vertices:
 					# print(vGraph)
 					label = "\\node[inner sep=1, at=(v-%d-0-v-%d.-20), anchor=160] {\\tiny $%.2f$};\n"
@@ -436,7 +436,7 @@ def printSolutions(*, ruleData, dgData, flowData):
 # Electron Pushing Rules #
 ##########################
 
-breakSingleBond = ruleGMLString("""rule [
+breakSingleBond = mod.Rule.fromGMLString("""rule [
 	ruleID "breakSingleBond"
 	labelType "term"
 	left [
@@ -450,7 +450,7 @@ breakSingleBond = ruleGMLString("""rule [
 	]
 ]""", add=False)
 formSingleBond = breakSingleBond.makeInverse()
-breakDoubleBond = ruleGMLString("""rule [
+breakDoubleBond = mod.Rule.fromGMLString("""rule [
 	ruleID "breakDoubleBond"
 	labelType "term"
 	left [
@@ -471,7 +471,7 @@ formDoubleBond = breakDoubleBond.makeInverse()
 ########################
 
 # Moving Positve Charge:
-formPositiveCharge = ruleGMLString("""rule [
+formPositiveCharge = mod.Rule.fromGMLString("""rule [
 	ruleID "pushPositiveCharge"
 	labelType "term"
 	left [
@@ -486,7 +486,7 @@ formPositiveCharge = ruleGMLString("""rule [
 	]
 ]""", add=False)
 breakPositiveCharge = formPositiveCharge.makeInverse()
-formDoublePositiveCharge = ruleGMLString("""rule [
+formDoublePositiveCharge = mod.Rule.fromGMLString("""rule [
 	ruleID "pushDoublePositiveCharge"
 	labelType "term"
 	left [
@@ -503,7 +503,7 @@ formDoublePositiveCharge = ruleGMLString("""rule [
 breakDoublePositiveCharge = formDoublePositiveCharge.makeInverse()
 
 # Moving Negative Charge:
-formNegativeCharge = ruleGMLString("""rule [
+formNegativeCharge = mod.Rule.fromGMLString("""rule [
 	ruleID "formNegativeCharge"
 	labelType "term"
 	left [
@@ -517,7 +517,7 @@ formNegativeCharge = ruleGMLString("""rule [
 	]
 ]""", add=False)
 breakNegativeCharge = formNegativeCharge.makeInverse()
-formDoubleNegativeCharge = ruleGMLString("""rule [
+formDoubleNegativeCharge = mod.Rule.fromGMLString("""rule [
 	ruleID "pushDoubleNegativeCharge"
 	labelType "term"
 	left [
@@ -534,7 +534,7 @@ formDoubleNegativeCharge = ruleGMLString("""rule [
 breakDoubleNegativeCharge = formDoubleNegativeCharge.makeInverse()
 
 # Lone Electron Pairs used as nucleophile:
-oxygenLoneElectronPairs = ruleGMLString("""rule [
+oxygenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
 	ruleID "oxygenLoneElectronPairs"
 	labelType "term"
 	left [
@@ -549,7 +549,7 @@ oxygenLoneElectronPairs = ruleGMLString("""rule [
 	]
 ]""", add=False)
 # reverseOxygenElectronPairs = oxygenLoneElectronPairs.makeInverse()
-nitrogenLoneElectronPairs = ruleGMLString("""rule [
+nitrogenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
 	ruleID "nitrogenLoneElectronPairs"
 	labelType "term"
 	left [

@@ -16,11 +16,11 @@ with open(FILE_NAME, "r") as f:
 overall_time_start = time.perf_counter()
 
 # Test Example
-daniel_start = mod.smiles("BrC1C=C(C2C=CC=CC=2)N=CN=1")
-# daniel_start2 = mod.smiles("[NH2-]")
-daniel_start3 = mod.smiles("N")
-daniel_end = mod.smiles("[NH2-]C1=CC(C2C=CC=CC=2)NC=N1")
-daniel_end2 = mod.smiles("Br")
+daniel_start = mod.Graph.fromSMILES("BrC1C=C(C2C=CC=CC=2)N=CN=1")
+# daniel_start2 = mod.Graph.fromSMILES("[NH2-]")
+daniel_start3 = mod.Graph.fromSMILES("N")
+daniel_end = mod.Graph.fromSMILES("[NH2-]C1=CC(C2C=CC=CC=2)NC=N1")
+daniel_end2 = mod.Graph.fromSMILES("Br")
 ds = ap.termFromGraph(daniel_start)
 # ds2 = ap.termFromGraph(daniel_start2)
 ds3 = ap.termFromGraph(daniel_start3)

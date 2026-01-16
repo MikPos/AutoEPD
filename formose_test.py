@@ -16,12 +16,12 @@ with open(FILE_NAME, "r") as f:
 overall_time_start = time.perf_counter()
 
 # Test Example
-formaldehyde = mod.smiles("C=O", name="Formaldehyde")
-glycolaldehyde = mod.smiles( "OCC=O", name="Glycolaldehyde")
+formaldehyde = mod.Graph.fromSMILES("C=O", name="Formaldehyde")
+glycolaldehyde = mod.Graph.fromSMILES( "OCC=O", name="Glycolaldehyde")
 
-post_keto = mod.smiles("OC=CO")
+post_keto = mod.Graph.fromSMILES("OC=CO")
 
-post_aldol = mod.smiles("OC(C=O)CO")
+post_aldol = mod.Graph.fromSMILES("OC(C=O)CO")
 
 f = ap.termFromGraph(formaldehyde)
 g = ap.termFromGraph(glycolaldehyde)
