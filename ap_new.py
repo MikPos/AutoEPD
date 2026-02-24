@@ -258,7 +258,6 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None):
 	# nGraph = networkx.DiGraph() # This is fine.
 	seen = set()
-	print(rules)
 	dg = mod.DG(graphDatabase=graphDatabase, labelSettings=ls)
 	with dg.build() as b:
 		prev_sources = [sources]
@@ -317,7 +316,7 @@ def loadPartialCharges(dgData):
 			vString = gString.getVertexFromExternalId(v.id)
 			pc[v] = pcString[str(vString.id)]
 		atomVal[g] = pc
-	class AtomValues(object):
+	class AtomValues:
 		pass
 	res = AtomValues()
 	res.atomVal = atomVal
@@ -725,3 +724,76 @@ ionPotential = {
 	"Si": 8.15,
 	"I": 10.45,
 }
+
+
+
+class Instance:
+	def run(self) -> None:
+		msgPrefix = f"Instance.run({self.name}):"
+		SIZE_LIMIT = getattr(self, "size_limit", 3)
+		ITERATION_LIMIT = getattr(self, "iteration_limit", 2)
+		print(msgPrefix, f"size_limit={SIZE_LIMIT}, iteration_limit={ITERATION_LIMIT}")
+
+		import time
+
+		ruleData = chargeSeparation()
+
+		print("=" * 80)
+		print(msgPrefix, "making DG")
+		print("=" * 80)
+		timeStart = time.perf_counter()
+		dgData = makeDG(
+			rules=ruleData.rules,
+			sources=self.sources,
+			targets=self.targets,
+			graphDatabase=mod.inputGraphs + self.sources + self.targets,
+			sizeLimit=SIZE_LIMIT,
+			iterationLimit=ITERATION_LIMIT
+		)
+		# rename graphs
+		for v in dgData.dgString.vertices:
+			g = v.graph
+			for a in self.nameSet:
+				if a.isomorphism(g, labelSettings=lsString) > 0:
+					g.name = a.name
+					break
+		timeDG = time.perf_counter()
+		print("-" * 80)
+		print(msgPrefix, f"time {timeDG - timeStart} DG")
+		print(msgPrefix, f"|V| = {dgData.dg.numVertices}")
+		print(msgPrefix, f"|E| = {dgData.dg.numEdges}")
+		print("=" * 80)
+		print(msgPrefix, "getting partial charges")
+		ruleData.atomVals = loadPartialCharges(dgData)
+		timePartChg = time.perf_counter()
+		print("-" * 80)
+		print(msgPrefix, f"time {timePartChg - timeDG} partial charges")
+		print("=" * 80)
+		print(msgPrefix, "finding flow solutions")
+		flowData = calcPathways(
+			ruleData=ruleData, dgData=dgData,
+			sources=self.sources, targets=self.targets,
+			# pathGraphs=allowed_graphs
+		)
+		flow = flowData.flow
+		flow.addEnumerationVar(mod.isEdgeUsed)
+
+		# Why does it keep being shit?
+		flow.findSolutions(verbosity=1, maxNumSolutions=1)
+		flow.solutions.list()
+
+		timeFlow = time.perf_counter()
+		print("-" * 80)
+		print(msgPrefix, f"time {timeFlow - timePartChg} flow")
+		print("=" * 80)
+		print(msgPrefix, "printing solutions")
+		files = printSolutions(ruleData=ruleData, dgData=dgData, flowData=flowData)
+		for f in files:
+			print(msgPrefix, "files:", f)
+		timePrint = time.perf_counter()
+		print("-" * 80)
+		print(msgPrefix, f"time {timePrint - timeFlow} printing")
+		print("=" * 80)
+
+
+		print(msgPrefix, f"time {timePrint - timeStart} total")
