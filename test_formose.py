@@ -36,3 +36,5 @@ class ExFormoseAldol(ap.Instance):
 		self.targets = [pa]
 		self.name = "Aldol"
 		self.iteration_limit = 4
+
+exAll = [ExFormoseKetoEnol, ExFormoseAldol]

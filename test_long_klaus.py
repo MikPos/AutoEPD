@@ -38,3 +38,5 @@ class ExLongKlaus2(ap.Instance):
 		self.targets = [e1,e2]
 		self.name = "LongKlaus2"
 		self.iteration_limit = 3
+
+exAll = [ExLongKlaus1, ExLongKlaus2]

@@ -21,3 +21,5 @@ class ExDaniel(ap.Instance):
 		self.targets = [de, de2]
 		self.name = "DanielTest"
 		self.iteration_limit = 3
+
+exAll = [ExDaniel]

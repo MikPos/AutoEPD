@@ -74,7 +74,7 @@ def graphFromTerm(g):
 	s += "]\n"
 	return mod.Graph.fromGMLString(s, name=g.name + ", string", add=False)
 
-def _haxAtomMapEvaluateToMakeRules(vMap):
+def makeRuleFromVertexMap(vMap):
 	left = ""
 	right = ""
 	# Vertices
@@ -132,17 +132,16 @@ def _haxAtomMapEvaluateToMakeRules(vMap):
 	s = "rule [\n\tleft [\n%s\t]\n\tright [\n%s\t]\n]\n" % (left, right)
 	return s
 
-rules = {}  # due to a bug, the rules must be kept alive outside the DG
 # def dgProject(dg, gMap, path, withEdges=True): # Why are we even doing this? Atom Maps?
 def dgProject(dg, gMap, withEdges=True): # Why are we even doing this? Atom Maps?
 	graphs = {}
-	rule_strings = set()
 	for v in dg.vertices:
 		graph = gMap(v.graph)
 		if graph:
 			graphs[v.graph] = graph
 	dgNew = mod.DG(graphDatabase=[], labelSettings=lsString)
 	eMap = {}
+	rules = {}
 	with dgNew.build() as b:
 		for e in dg.edges:
 			if not withEdges:
@@ -150,15 +149,16 @@ def dgProject(dg, gMap, withEdges=True): # Why are we even doing this? Atom Maps
 				d.left = [graphs[v.graph] for v in e.sources]
 				d.right = [graphs[v.graph] for v in e.targets]
 			else:
-				rule_strings.clear()
+				rule_strings = set()
 				vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
 				for vm in vms:
-					rule_strings.add(_haxAtomMapEvaluateToMakeRules(vm))
+					rule_strings.add(makeRuleFromVertexMap(vm))
 				rs = []
 				for s in rule_strings:
 					if s not in rules:
 						rules[s] = mod.Rule.fromGMLString(s, add=False)
 					rs.append(rules[s])
+				#print(f"{e.id}, |vms|: {len(vms)}, |rule_strings|: {len(rule_strings)}, |rs|: {len(rs)}")
 				for r in rs: #WHY??????
 					d = mod.Derivation()
 					d.left = [graphs[v.graph] for v in e.sources]
@@ -284,7 +284,7 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 	# dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, path, withEdgeProjection)
 	dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, withEdgeProjection)
 	print("Projection done")
-	class DGData(object):
+	class DGData:
 		pass
 	res = DGData()
 	res.dg = dg
@@ -345,7 +345,8 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 
 	flow = mod.hyperflow.Model(dg, ilpSolver="CPLEX")
 	for g in badMols:
-		flow.addConstraint(mod.vertex[g] == 0)
+		if dg.findVertex(g):
+			flow.addConstraint(mod.vertex[g] == 0)
 	if maxNumSplits is not None:
 		expr = mod.FlowLinExp()
 		for e in dg.edges:
@@ -746,7 +747,7 @@ class Instance:
 			rules=ruleData.rules,
 			sources=self.sources,
 			targets=self.targets,
-			graphDatabase=mod.inputGraphs + self.sources + self.targets,
+			graphDatabase=self.sources + self.targets,
 			sizeLimit=SIZE_LIMIT,
 			iterationLimit=ITERATION_LIMIT
 		)

@@ -152,3 +152,5 @@ class ExN(ap.Instance):
 		self.sources = [n_start]
 		self.targets = [n_end]
 		self.name = "Exercise N"
+
+exAll = [ExA, ExB, ExC, ExD, ExE, ExF, ExG, ExH, ExM, ExN]
