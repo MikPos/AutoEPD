@@ -132,7 +132,6 @@ def makeRuleFromVertexMap(vMap):
 	s = "rule [\n\tleft [\n%s\t]\n\tright [\n%s\t]\n]\n" % (left, right)
 	return s
 
-# def dgProject(dg, gMap, path, withEdges=True): # Why are we even doing this? Atom Maps?
 def dgProject(dg, gMap, withEdges=True): # Why are we even doing this? Atom Maps?
 	graphs = {}
 	for v in dg.vertices:
@@ -187,7 +186,6 @@ def allPartitions(molecule):
 
 
 
-# def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction, digraph):
 def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 	result = []
 	def addSeenGraphs(gs):
@@ -239,7 +237,7 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 						# 	digraph.add_edge(tuple(sorted(gsSub, key=lambda g: g.id)), tuple(sorted(result_gsSub, key=lambda g: g.id)))
 						# else:
 						if direction == "reverse":
-							inverseRule = ruleDB[r.id]
+							inverseRule = inverseRuleDB[r.id]
 							derivation = mod.Derivation()
 							derivation.left = result_gsSub
 							derivation.rule = inverseRule
@@ -388,7 +386,7 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 	return res
 
 
-def printSolutions(*, ruleData, dgData, flowData):
+def printSolutions(*, ruleData, dgData, flowData, prettyPrint):
 	atomValString = ruleData.atomVals.atomValString
 	dgString = dgData.dgString
 	graphMap = dgData.graphMap
@@ -403,14 +401,15 @@ def printSolutions(*, ruleData, dgData, flowData):
 		"""
 		pGraph = p.graphPrinter
 		pGraph.setMolDefault()
-		pGraph.collapseHydrogens = False
-		pGraph.simpleCarbons = False
+		pGraph.collapseHydrogens = False if prettyPrint == False else True
+		pGraph.simpleCarbons = False if prettyPrint == False else True
 		p.withInlineGraphs = True
 		vVis = lambda v: s.eval(mod.vertex[graphMap[v.graph]]) != 0
-		p.pushEdgeLabel(lambda e: ", ".join(r.name for r in edgeMap[e].rules))
 		p.pushVertexVisible(vVis)
 		p.pushEdgeVisible(lambda e: s.eval(mod.edgeFlow[edgeMap[e]]) != 0)
-		p.pushEdgeLabel(lambda e: "%.2f" % valMap[edgeMap[e]])
+		if prettyPrint == False:
+			p.pushEdgeLabel(lambda e: ", ".join(r.name for r in edgeMap[e].rules))
+			p.pushEdgeLabel(lambda e: "%.2f" % valMap[edgeMap[e]])
 		fDG, fCoords = dgString.print(p)
 
 		fName = "out/%d_%d_aux.tex" % (flow.id, s.id)
@@ -565,7 +564,7 @@ nitrogenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
 ]""", add=False)
 # reverseNitrogenElectronPairs = nitrogenLoneElectronPairs.makeInverse()
 
-ruleDB = {
+inverseRuleDB = {
 	formNegativeCharge.id: breakNegativeCharge,
 	breakNegativeCharge.id: formNegativeCharge,
 	formDoubleNegativeCharge.id: breakDoubleNegativeCharge,
@@ -729,7 +728,7 @@ ionPotential = {
 
 
 class Instance:
-	def run(self) -> None:
+	def run(self, prettyPrint) -> None:
 		msgPrefix = f"Instance.run({self.name}):"
 		SIZE_LIMIT = getattr(self, "size_limit", 3)
 		ITERATION_LIMIT = getattr(self, "iteration_limit", 2)
@@ -788,7 +787,7 @@ class Instance:
 		print(msgPrefix, f"time {timeFlow - timePartChg} flow")
 		print("=" * 80)
 		print(msgPrefix, "printing solutions")
-		files = printSolutions(ruleData=ruleData, dgData=dgData, flowData=flowData)
+		files = printSolutions(ruleData=ruleData, dgData=dgData, flowData=flowData, prettyPrint=prettyPrint)
 		for f in files:
 			print(msgPrefix, "files:", f)
 		timePrint = time.perf_counter()
