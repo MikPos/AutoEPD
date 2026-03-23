@@ -4,6 +4,8 @@ import random
 import mod
 from mod import LabelSettings, LabelType, LabelRelation, BondType, ruleGMLString, graphGMLString
 
+from typing import Optional
+
 ls = LabelSettings(LabelType.Term, LabelRelation.Specialisation)
 lsString = LabelSettings(LabelType.String, LabelRelation.Specialisation)
 
@@ -255,8 +257,9 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 
 
 
-def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None):
+def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None, msgName: Optional[str]):
 	# nGraph = networkx.DiGraph() # This is fine.
+	msgPrefix = None if msgName is None else f"   makeDG({msgName}):"
 	seen = set()
 	dg = mod.DG(graphDatabase=graphDatabase, labelSettings=ls)
 	with dg.build() as b:
@@ -269,7 +272,8 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 			iteration += 1
 			if iterationLimit is not None and iteration > iterationLimit: # Should be changed so it exits at an overlap in seen_sources and seen_targets.
 				break
-			print("Iteration %d on %d source sets and %d target sets" % (iteration, len(prev_sources), len(prev_targets)))
+			if msgPrefix is not None:
+				print(msgPrefix, "Iteration %d on %d source sets and %d target sets" % (iteration, len(prev_sources), len(prev_targets)))
 			# next_sources = computeNextIteration(prev_sources, rules, b, dg, sizeLimit, seen, "forward", nGraph)
 			next_sources = computeNextIteration(prev_sources, rules, b, dg, sizeLimit, seen, "forward")
 			prev_sources = next_sources
@@ -280,10 +284,12 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 	# path = networkx.dijkstra_path(nGraph, source=tuple(sorted(sources, key=lambda g: g.id)), target=tuple(sorted(targets, key=lambda g: g.id)))
 	# print(path)
 
-	print("Projecting term DG to string DG (%d vertices, %d edges)." % (dg.numVertices, dg.numEdges))
+	if msgPrefix is not None:
+		print(msgPrefix, "Projecting term DG to string DG (%d vertices, %d edges)." % (dg.numVertices, dg.numEdges))
 	# dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, path, withEdgeProjection)
 	dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, withEdgeProjection)
-	print("Projection done")
+	if msgPrefix is not None:
+		print(msgPrefix, "Projection done")
 	class DGData:
 		pass
 	res = DGData()
@@ -749,7 +755,8 @@ class Instance:
 			targets=self.targets,
 			graphDatabase=self.sources + self.targets,
 			sizeLimit=SIZE_LIMIT,
-			iterationLimit=ITERATION_LIMIT
+			iterationLimit=ITERATION_LIMIT,
+			msgName=self.name
 		)
 		# rename graphs
 		for v in dgData.dgString.vertices:
