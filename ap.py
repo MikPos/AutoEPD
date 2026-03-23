@@ -2,7 +2,7 @@ import itertools
 import subprocess
 import random
 import mod
-from mod import LabelSettings, LabelType, LabelRelation, BondType, ruleGMLString, graphGMLString
+from mod import LabelSettings, LabelType, LabelRelation, BondType
 
 ls = LabelSettings(LabelType.Term, LabelRelation.Specialisation)
 lsString = LabelSettings(LabelType.String, LabelRelation.Specialisation)
@@ -15,16 +15,11 @@ termBondFromBondType = {
 	BondType.Aromatic: "__error2"
 }
 
-cycle3 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}1")
-cycle4 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}[*]{*}1")
-badList = [cycle3, cycle4]
-for i in [-1, 1]:
-	break
-	g = mod.Graph.fromDFS("[a(_a1, %d)]{*}[a(_a2, %d)]" % (i, i))
-	badList.append(g)
-doubleDouble = mod.Graph.fromDFS("[*]{e(p(p(0)))}[*]{e(p(p(0)))}[*]")
-badList.append(doubleDouble)
-badMols = set()
+cycle_of_3 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}1")
+cycle_of_4 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}[*]{*}1")
+double_double_bond = mod.Graph.fromDFS("[*]{e(p(p(0)))}[*]{e(p(p(0)))}[*]")
+non_chemical_patterns = [cycle_of_3, cycle_of_4, double_double_bond]
+removed_graphs = set()
 
 
 def termFromGraph(g):
@@ -62,7 +57,6 @@ def decodeEdgeLabel(l):
 		bt = "#"
 	else:
 		bt = None
-		# raise ValueError("Can not convert edge term '%s' to a molecule." % l)
 	return bt
 
 def graphFromTerm(g):
@@ -87,7 +81,6 @@ def makeRuleFromVertexMap(vMap):
 			continue
 		vl = vG.vertex
 		left  += '\t\tnode [ id %d label "%s" ]\n' % (v.id, decodeVertexLabel(vl.stringLabel))
-
 		# Rigth side of rule
 		if not v.right:
 			continue
@@ -97,7 +90,6 @@ def makeRuleFromVertexMap(vMap):
 		vr = vH.vertex
 		if not vr.isNull():
 			right += '\t\tnode [ id %d label "%s" ]\n' % (v.id, decodeVertexLabel(vr.stringLabel))
-
 	# Edges
 	for e in vMap.rule.edges:
 		# Left side of edge
@@ -114,7 +106,6 @@ def makeRuleFromVertexMap(vMap):
 				break
 		assert el is not None
 		left += '\t\tedge [ source %d target %d label "%s" ]\n' % (e.source.id, e.target.id, decodeEdgeLabel(el.stringLabel))
-
 		# Right side of edge
 		if not e.right:
 			continue
@@ -132,24 +123,24 @@ def makeRuleFromVertexMap(vMap):
 	s = "rule [\n\tleft [\n%s\t]\n\tright [\n%s\t]\n]\n" % (left, right)
 	return s
 
-def dgProject(dg, gMap, withEdges=True): # Why are we even doing this? Atom Maps?
+def dgProject(dg, gMap, withEdges=True):
 	graphs = {}
 	for v in dg.vertices:
 		graph = gMap(v.graph)
 		if graph:
 			graphs[v.graph] = graph
 	dgNew = mod.DG(graphDatabase=[], labelSettings=lsString)
-	eMap = {}
+	edgeMap = {}
 	rules = {}
 	with dgNew.build() as b:
-		for e in dg.edges:
+		for hyperedge in dg.edges:
 			if not withEdges:
 				d = mod.Derivation()
-				d.left = [graphs[v.graph] for v in e.sources]
-				d.right = [graphs[v.graph] for v in e.targets]
+				d.left = [graphs[v.graph] for v in hyperedge.sources]
+				d.right = [graphs[v.graph] for v in hyperedge.targets]
 			else:
 				rule_strings = set()
-				vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
+				vms = mod.DGVertexMapper(hyperedge, upToIsomorphismGDH = True, rightLimit = 1)
 				for vm in vms:
 					rule_strings.add(makeRuleFromVertexMap(vm))
 				rs = []
@@ -157,18 +148,17 @@ def dgProject(dg, gMap, withEdges=True): # Why are we even doing this? Atom Maps
 					if s not in rules:
 						rules[s] = mod.Rule.fromGMLString(s, add=False)
 					rs.append(rules[s])
-				#print(f"{e.id}, |vms|: {len(vms)}, |rule_strings|: {len(rule_strings)}, |rs|: {len(rs)}")
-				for r in rs: #WHY??????
+				for r in rs:
 					d = mod.Derivation()
-					d.left = [graphs[v.graph] for v in e.sources]
-					d.right = [graphs[v.graph] for v in e.targets]
+					d.left = [graphs[v.graph] for v in hyperedge.sources]
+					d.right = [graphs[v.graph] for v in hyperedge.targets]
 					d.rule = r
-				eNew = b.addDerivation(d) ## <- This is always just the last rule found
-			eMap[eNew] = e
+				new_edge = b.addDerivation(d)
+			edgeMap[new_edge] = hyperedge
 	graphMap = {}
 	for old, new in graphs.items():
 		graphMap[new] = old
-	return dgNew, graphMap, eMap
+	return dgNew, graphMap, edgeMap
 
 
 def allPartitions(molecule):
@@ -188,98 +178,79 @@ def allPartitions(molecule):
 
 def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 	result = []
-	def addSeenGraphs(gs):
-		t = tuple(sorted(gs, key=lambda g: g.id))
+	def addSeenGraphs(graph_set):
+		t = tuple(sorted(graph_set, key=lambda g: g.id))
 		seen.add(t)
-	def hasBeenSeen(gs):
-		t = tuple(sorted(gs, key=lambda g: g.id)) # This meeses with the comparison of the states.... They are not the same order when they are bidirectional.
+	def have_graphs_been_seen(graph_set):
+		t = tuple(sorted(graph_set, key=lambda g: g.id))
 		return t in seen
-	for gs in prev:
-		if hasBeenSeen(gs):
+	for graph_set in prev:
+		if have_graphs_been_seen(graph_set):
 			continue
-		if sizeLimit is not None and len(gs) > sizeLimit:
+		if sizeLimit is not None and len(graph_set) > sizeLimit:
 			continue
-		for gsSub, gsOther in allPartitions(gs):
-			if len(gsSub) == 0:
+		for reactant_graph_subset, rest_of_graph_set in allPartitions(graph_set):
+			if len(reactant_graph_subset) == 0:
 				continue
-			if hasBeenSeen(gsSub):
-				for e in getOutEdges(dg, gsSub):
-					gsNew = [v.graph for v in e.targets] + gsOther
-					# Should we even add it here?
-					# if direction == "forward":
-					# 	digraph.add_edge(tuple(sorted(gs, key=lambda g: g.id)), tuple(sorted(gsNew, key=lambda g: g.id)))
-					# else:
-					# 	digraph.add_edge(tuple(sorted(gsNew, key=lambda g: g.id)), tuple(sorted(gs, key=lambda g: g.id)))
-					if not hasBeenSeen(gsNew):
-						result.append(gsNew)
+			if have_graphs_been_seen(reactant_graph_subset):
+				for hyperedge in getOutEdges(dg, reactant_graph_subset):
+					new_graph_set = [v.graph for v in hyperedge.targets] + rest_of_graph_set
+					if not have_graphs_been_seen(new_graph_set):
+						result.append(new_graph_set)
 			else:
-				for r in rules:
-					es = build.apply(gsSub, r)
-					for e in es:
-						isBad = False
-						targets_list = [x for x in e.targets]
-						if len(targets_list) > sizeLimit:
-							isBad = True						
-						for v in e.targets:
-							if isBad:
+				for rule in rules:
+					edge_set = build.apply(reactant_graph_subset, rule)
+					for hyperedge in edge_set:
+						contains_non_chemical_pattern = False
+						parts_of_product = [x for x in hyperedge.targets]
+						if len(parts_of_product) > sizeLimit:
+							contains_non_chemical_pattern = True						
+						for v in hyperedge.targets:
+							if contains_non_chemical_pattern:
 								break
-							for pattern in badList:
+							for pattern in non_chemical_patterns:
 								if pattern.monomorphism(v.graph, labelSettings=ls) > 0:
-									isBad = True
-									badMols.add(v.graph)
+									contains_non_chemical_pattern = True
+									removed_graphs.add(v.graph)
 									break
 								
-						if isBad:
+						if contains_non_chemical_pattern:
 							continue
-						result_gsSub = [v.graph for v in e.targets]
-						gsNew = [v.graph for v in e.targets] + gsOther
-						# if direction == "forward":
-						# 	digraph.add_edge(tuple(sorted(gsSub, key=lambda g: g.id)), tuple(sorted(result_gsSub, key=lambda g: g.id)))
-						# else:
+						product_graph_subset = [v.graph for v in hyperedge.targets]
+						new_graph_set = [v.graph for v in hyperedge.targets] + rest_of_graph_set
 						if direction == "reverse":
-							inverseRule = inverseRuleDB[r.id]
+							reversed_rule = reverse_rule_map[rule.id]
 							derivation = mod.Derivation()
-							derivation.left = result_gsSub
-							derivation.rule = inverseRule
-							derivation.right = gsSub
+							derivation.left = product_graph_subset
+							derivation.rule = reversed_rule
+							derivation.right = reactant_graph_subset
 							build.addDerivation(derivation)
-							# build.apply(gsNew, inverseRule) # Add Inverse Rule
-							# digraph.add_edge(tuple(sorted(result_gsSub, key=lambda g: g.id)), tuple(sorted(gsSub, key=lambda g: g.id)))
-						if not hasBeenSeen(gsNew):
-							result.append(gsNew)
-				addSeenGraphs(gsSub)
-		addSeenGraphs(gs)
+						if not have_graphs_been_seen(new_graph_set):
+							result.append(new_graph_set)
+				addSeenGraphs(reactant_graph_subset)
+		addSeenGraphs(graph_set)
 	return result
 
 
 
 def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None):
-	# nGraph = networkx.DiGraph() # This is fine.
 	seen = set()
 	dg = mod.DG(graphDatabase=graphDatabase, labelSettings=ls)
 	with dg.build() as b:
-		prev_sources = [sources]
-		prev_targets = [targets]
-		# nGraph.add_node(tuple(sorted(sources, key=lambda g: g.id))) # Not ideal way to add them.
-		# nGraph.add_node(tuple(sorted(targets, key=lambda g: g.id)))
+		previous_sources = [sources]
+		previous_targets = [targets]
 		iteration = 0
-		while len(prev_sources) > 0 or len(prev_targets) > 0:
+		while len(previous_sources) > 0 or len(previous_targets) > 0:
 			iteration += 1
-			if iterationLimit is not None and iteration > iterationLimit: # Should be changed so it exits at an overlap in seen_sources and seen_targets.
+			if iterationLimit is not None and iteration > iterationLimit:
 				break
-			print("Iteration %d on %d source sets and %d target sets" % (iteration, len(prev_sources), len(prev_targets)))
-			# next_sources = computeNextIteration(prev_sources, rules, b, dg, sizeLimit, seen, "forward", nGraph)
-			next_sources = computeNextIteration(prev_sources, rules, b, dg, sizeLimit, seen, "forward")
-			prev_sources = next_sources
-			# next_targets = computeNextIteration(prev_targets, rules, b, dg, sizeLimit, seen, "reverse", nGraph)
-			next_targets = computeNextIteration(prev_targets, rules, b, dg, sizeLimit, seen, "reverse")
-			prev_targets = next_targets
-
-	# path = networkx.dijkstra_path(nGraph, source=tuple(sorted(sources, key=lambda g: g.id)), target=tuple(sorted(targets, key=lambda g: g.id)))
-	# print(path)
+			print("Iteration %d on %d source sets and %d target sets" % (iteration, len(previous_sources), len(previous_targets)))
+			next_sources = computeNextIteration(previous_sources, rules, b, dg, sizeLimit, seen, "forward")
+			previous_sources = next_sources
+			next_targets = computeNextIteration(previous_targets, rules, b, dg, sizeLimit, seen, "reverse")
+			previous_targets = next_targets
 
 	print("Projecting term DG to string DG (%d vertices, %d edges)." % (dg.numVertices, dg.numEdges))
-	# dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, path, withEdgeProjection)
 	dgString, graphMap, edgeMap = dgProject(dg, graphFromTerm, withEdgeProjection)
 	print("Projection done")
 	class DGData:
@@ -290,7 +261,6 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 	res.graphMap = graphMap
 	res.edgeMap = edgeMap
 	
-	# return res, path
 	return res
 
 #############################
@@ -300,31 +270,33 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 def loadPartialCharges(dgData):
 	dgString = dgData.dgString
 	graphMap = dgData.graphMap
-	atomValString = {}
+	partial_charge_graph_map_string = {}
 
 	for vertex in dgString.vertices:
-		partialCharges = computeAllCharges(vertex.graph)
-		atomValString[vertex.graph] = partialCharges
+		all_partial_charges = computeAllCharges(vertex.graph)
+		partial_charge_graph_map_string[vertex.graph] = all_partial_charges
 
-	atomVal = {}
-	for gString, pcString in atomValString.items():
-		g = graphMap[gString]
-		pc = {}
+	partial_charge_graph_map = {}
+	for graph_string, partial_charge_string in partial_charge_graph_map_string.items():
+		g = graphMap[graph_string]
+		partial_charges_vertex_map = {}
 		for v in g.vertices:
-			vString = gString.getVertexFromExternalId(v.id)
-			pc[v] = pcString[str(vString.id)]
-		atomVal[g] = pc
+			vString = graph_string.getVertexFromExternalId(v.id)
+			partial_charges_vertex_map[v] = partial_charge_string[str(vString.id)]
+		partial_charge_graph_map[g] = partial_charges_vertex_map
 	class AtomValues:
 		pass
 	res = AtomValues()
-	res.atomVal = atomVal
-	res.atomValString = atomValString
+	res.atomVal = partial_charge_graph_map
+	res.atomValString = partial_charge_graph_map_string
 	res.lowerBound = 200
 	res.scale = 100
 	return res
 
 
-# def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None, pathGraphs):
+###
+# Not yet edited:
+###
 def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 	dg = dgData.dg
 	valLowerBound = ruleData.atomVals.lowerBound
@@ -334,15 +306,12 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 	for e in dg.edges:
 		vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
 		vals = []
-		# print(e)
-		# for s in e.sources:
-		# 	print(s.graph.getGMLString())
 		for vm in vms:
 			vals.append(ruleData.eval(vm.rule ,vm))
 		valMap[e] = min(vals)
 
 	flow = mod.hyperflow.Model(dg, ilpSolver="CPLEX")
-	for g in badMols:
+	for g in removed_graphs:
 		if dg.findVertex(g):
 			flow.addConstraint(mod.vertex[g] == 0)
 	if maxNumSplits is not None:
@@ -351,10 +320,6 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 			if e.numTargets > 1:
 				expr += mod.isEdgeUsed[e]
 		flow.addConstraint(expr <= maxNumSplits)
-	
-	# for vertex in dg.vertices:
-	# 	if vertex.graph not in pathGraphs:
-	# 		flow.exclude(vertex)
 
 	s = sum(a.numVertices for a in sources)
 	t = sum(a.numVertices for a in targets)
@@ -421,7 +386,6 @@ def printSolutions(*, ruleData, dgData, flowData, prettyPrint):
 				g = v.graph
 				if not vVis(v): continue
 				for vGraph in g.vertices:
-					# print(vGraph)
 					label = "\\node[inner sep=1, at=(v-%d-0-v-%d.-20), anchor=160] {\\tiny $%.2f$};\n"
 					f.write(label % (v.id, vGraph.id, atomValString[g][str(vGraph.id)]))
 			f.write("\\end{tikzpicture}\n")
@@ -465,120 +429,11 @@ breakDoubleBond = mod.Rule.fromGMLString("""rule [
 ]""", add=False)
 formDoubleBond = breakDoubleBond.makeInverse()
 
-########################
-# Potential New Rules: #
-########################
-
-# Moving Positve Charge:
-formPositiveCharge = mod.Rule.fromGMLString("""rule [
-	ruleID "pushPositiveCharge"
-	labelType "term"
-	left [
-		node [ id 0 label "a(_S0, 0)" ]
-		node [ id 1 label "a(_S1, 1)" ]
-		edge [ source 0 target 1 label "e(p(0))" ]
-	]
-	right [
-		node [ id 0 label "a(_S0, 1)" ]
-		node [ id 1 label "a(_S1, 0)" ]
-
-	]
-]""", add=False)
-breakPositiveCharge = formPositiveCharge.makeInverse()
-formDoublePositiveCharge = mod.Rule.fromGMLString("""rule [
-	ruleID "pushDoublePositiveCharge"
-	labelType "term"
-	left [
-		node [ id 0 label "a(_S0, 0)" ]
-		node [ id 1 label "a(_S1, 1)" ]
-		edge [ source 0 target 1 label "e(p(p(_E)))" ]
-	]
-	right [
-		node [ id 0 label "a(_S0, 1)" ]
-		node [ id 1 label "a(_S1, 0)" ]
-		edge [ source 0 target 1 label "e(p(_E))" ]
-	]
-]""", add=False)
-breakDoublePositiveCharge = formDoublePositiveCharge.makeInverse()
-
-# Moving Negative Charge:
-formNegativeCharge = mod.Rule.fromGMLString("""rule [
-	ruleID "formNegativeCharge"
-	labelType "term"
-	left [
-		node [ id 0 label "a(_S0, 0)" ]
-		node [ id 1 label "a(_S1, -1)" ]
-	]
-	right [
-		node [ id 0 label "a(_S0, -1)" ]
-		node [ id 1 label "a(_S1, 0)" ]
-		edge [ source 0 target 1 label "e(p(0))" ]
-	]
-]""", add=False)
-breakNegativeCharge = formNegativeCharge.makeInverse()
-formDoubleNegativeCharge = mod.Rule.fromGMLString("""rule [
-	ruleID "pushDoubleNegativeCharge"
-	labelType "term"
-	left [
-		node [ id 0 label "a(_S0, 0)" ]
-		node [ id 1 label "a(_S1, -1)" ]
-		edge [ source 0 target 1 label "e(p(p(_E)))" ]
-	]
-	right [
-		node [ id 0 label "a(_S0, -1)" ]
-		node [ id 1 label "a(_S1, 0)" ]
-		edge [ source 0 target 1 label "e(p(_E))" ]
-	]
-]""", add=False)
-breakDoubleNegativeCharge = formDoubleNegativeCharge.makeInverse()
-
-# Lone Electron Pairs used as nucleophile:
-oxygenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
-	ruleID "oxygenLoneElectronPairs"
-	labelType "term"
-	left [
-		node [ id 0 label "a(_S0, 1)" ]
-		node [ id 1 label "a(O, 0)" ]
-	]
-	right [
-		node [ id 0 label "a(_S0, 0)" ]
-		node [ id 1 label "a(O, 1)" ]
-		edge [ source 0 target 1 label "e(p(0))" ]
-
-	]
-]""", add=False)
-# reverseOxygenElectronPairs = oxygenLoneElectronPairs.makeInverse()
-nitrogenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
-	ruleID "nitrogenLoneElectronPairs"
-	labelType "term"
-	left [
-		node [ id 0 label "a(_S0, 1)" ]
-		node [ id 1 label "a(N, 0)" ]
-	]
-	right [
-		node [ id 0 label "a(_S0, 0)" ]
-		node [ id 1 label "a(N, 1)" ]
-		edge [ source 0 target 1 label "e(p(0))" ]
-
-	]
-]""", add=False)
-# reverseNitrogenElectronPairs = nitrogenLoneElectronPairs.makeInverse()
-
-inverseRuleDB = {
-	formNegativeCharge.id: breakNegativeCharge,
-	breakNegativeCharge.id: formNegativeCharge,
-	formDoubleNegativeCharge.id: breakDoubleNegativeCharge,
-	breakDoubleNegativeCharge.id: formDoubleNegativeCharge,
-	formPositiveCharge.id: breakPositiveCharge,
-	breakPositiveCharge.id: formPositiveCharge,
-	formDoublePositiveCharge.id: breakDoublePositiveCharge,
-	breakDoublePositiveCharge.id: formDoublePositiveCharge,
+reverse_rule_map = {
 	formSingleBond.id: breakSingleBond,
 	breakSingleBond.id: formSingleBond,
 	formDoubleBond.id: breakDoubleBond,
-	breakDoubleBond.id: formDoubleBond,
-	nitrogenLoneElectronPairs.id: breakSingleBond,
-	oxygenLoneElectronPairs.id: breakSingleBond
+	breakDoubleBond.id: formDoubleBond
 }
 
 def chargeSeparation():
@@ -595,13 +450,10 @@ def chargeSeparation():
 				assert a.stringLabel[:4] == b.stringLabel[:4]
 			v0 = r.getVertexFromExternalId(0)
 			v1 = r.getVertexFromExternalId(1)
-			# Make similar to _haxAtomMapEvaluate...
 			v0l = vMap.match[v0.left].vertex
 			v0r = vMap.comatch[v0.right].vertex
 			v1l = vMap.match[v1.left].vertex
 			v1r = vMap.comatch[v1.right].vertex
-			# v0l, v0r = vMap(v0)
-			# v1l, v1r = vMap(v1)
 			check(v0l, v0r)
 			check(v1l, v1r)
 			val0 = atomVal[v0l.graph][v0l]
@@ -610,35 +462,24 @@ def chargeSeparation():
 				return val1 - val0
 			elif r in [formSingleBond, formDoubleBond]:
 				return -(val0 - val1)
-			# elif r in [formNegativeCharge, formDoubleNegativeCharge, breakNegativeCharge, breakDoubleNegativeCharge,
-			# 	  	   formPositiveCharge, formDoublePositiveCharge, breakPositiveCharge, breakDoublePositiveCharge,
-			# 		   oxygenLoneElectronPairs, nitrogenLoneElectronPairs]:
-			# 	return 0.0
 			else:
 				assert False
-	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond,
-				#   pushPositiveCharge, pushNegativeCharge, pushDoublePositiveCharge, pushDoubleNegativeCharge,
-				#   formNegativeCharge, formDoubleNegativeCharge, breakNegativeCharge, breakDoubleNegativeCharge,
-				#   formPositiveCharge, formDoublePositiveCharge, breakPositiveCharge, breakDoublePositiveCharge,
-				#   oxygenLoneElectronPairs, nitrogenLoneElectronPairs
-	])
+	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond])
 
-
-# Haxed Functions:
 def getOutEdges(dg, molecules):
   assert dg
   molecules = list(sorted(molecules))
   result = []
   for edge in dg.edges:
-    gsCandidate = list(sorted(vertex.graph for vertex in edge.sources))
-    if gsCandidate == molecules:
+    graph_set_candidate = list(sorted(vertex.graph for vertex in edge.sources))
+    if graph_set_candidate == molecules:
       result.append(edge)
   return result
 
 
-#########################
-# Haxed Partial Charge: #
-#########################
+###############################
+# Partial Charge Calculation: #
+###############################
 def computePartialCharge():
 	return random.random()
 
@@ -651,21 +492,21 @@ def computeAllCharges(molecule):
 def calcGasteigerCharge(vertex):
 	total = 0
 
-	for alpha in range(1,7):
-		listHigher, listLower = seperateNeighbors(vertex.incidentEdges)
+	for iteration in range(1,7):
+		neighbors_of_higher_electronegativity, neighbors_of_lower_electronegativity = seperateNeighbors(vertex.incidentEdges)
 
 		sum = 0
-		for j in listHigher: # List of neighboring vertices with higher electronegativity.
-			maxDiff = getIonPotential(vertex.stringLabel) / 0.75#/ ionPotential[j.stringLabel]
-			electronDiff = getElectronegativity(j.stringLabel) - getElectronegativity(vertex.stringLabel)
-			sum += (1/maxDiff) * electronDiff
+		for neighbor in neighbors_of_higher_electronegativity:
+			ion_potential = getIonPotential(vertex.stringLabel) / 0.75
+			difference_in_electronegativity = getElectronegativity(neighbor.stringLabel) - getElectronegativity(vertex.stringLabel)
+			sum += (1/ion_potential) * difference_in_electronegativity
 
-		for k in listLower: # List of neighboring vertices with lower electronegativity.
-			maxDiff = getIonPotential(k.stringLabel) / 0.75#/ ionPotential[vertex.stringLabel]
-			electronDiff = getElectronegativity(k.stringLabel) - getElectronegativity(vertex.stringLabel)
-			sum += (1/maxDiff) * electronDiff
+		for neighbor in neighbors_of_lower_electronegativity:
+			ion_potential = getIonPotential(neighbor.stringLabel) / 0.75
+			difference_in_electronegativity = getElectronegativity(neighbor.stringLabel) - getElectronegativity(vertex.stringLabel)
+			sum += (1/ion_potential) * difference_in_electronegativity
 
-		sum *= 0.5**(alpha-1)
+		sum *= 0.5**(iteration-1)
 		total += sum
 	charge = 0
 	if "+" in vertex.stringLabel:
@@ -682,23 +523,21 @@ def getElectronegativity(label):
 def getIonPotential(label):
 	return ionPotential[label.replace("1-", "").replace("1+", "")]
 
-
-
 def seperateNeighbors(edges):
-	lower = []
-	higher = []
+	lower_electronegativity_neighbors = []
+	higher_electronegativity_neighbors = []
 	for edge in edges:
 		if getElectronegativity(edge.target.stringLabel) < getElectronegativity(edge.source.stringLabel):
 			if edge.stringLabel == "=":
-				lower.append(edge.target)
-			lower.append(edge.target)
+				lower_electronegativity_neighbors.append(edge.target)
+			lower_electronegativity_neighbors.append(edge.target)
 		elif getElectronegativity(edge.target.stringLabel) > getElectronegativity(edge.source.stringLabel):
 			if edge.stringLabel == "=":
-				higher.append(edge.target)
-			higher.append(edge.target)
+				higher_electronegativity_neighbors.append(edge.target)
+			higher_electronegativity_neighbors.append(edge.target)
 		else:
 			continue
-	return higher, lower
+	return higher_electronegativity_neighbors, lower_electronegativity_neighbors
 
 electronegativity = {
 	"H": 2.20,
@@ -712,6 +551,7 @@ electronegativity = {
 	"Si": 1.90,
 	"I": 2.66,
 }
+
 ionPotential = {
 	"H": 13.59,
 	"C": 11.26,
@@ -725,7 +565,9 @@ ionPotential = {
 	"I": 10.45,
 }
 
-
+###########################
+# Testing Instance Class: #
+###########################
 
 class Instance:
 	def run(self, prettyPrint) -> None:
@@ -773,12 +615,10 @@ class Instance:
 		flowData = calcPathways(
 			ruleData=ruleData, dgData=dgData,
 			sources=self.sources, targets=self.targets,
-			# pathGraphs=allowed_graphs
 		)
 		flow = flowData.flow
 		flow.addEnumerationVar(mod.isEdgeUsed)
 
-		# Why does it keep being shit?
 		flow.findSolutions(verbosity=1, maxNumSolutions=1)
 		flow.solutions.list()
 
