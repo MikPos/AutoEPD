@@ -3,7 +3,7 @@ summary*/
 flows/
 tex_files/
 old_summaries*/
-figures_for_aeticles/
+figures*/
 DG_dumps/
 test*.py
 *plots*.py
@@ -11,3 +11,4 @@ test*.py
 *.txt
 *.pdf
 __pycache__
+.DS_Store
