@@ -576,7 +576,7 @@ ionPotential = {
 ###########################
 
 class Instance:
-	def run(self, prettyPrint) -> None:
+	def run(self, prettyPrint=False) -> None:
 		msgPrefix = f"Instance.run({self.name}):"
 		SIZE_LIMIT = getattr(self, "size_limit", 3)
 		ITERATION_LIMIT = getattr(self, "iteration_limit", 2)
