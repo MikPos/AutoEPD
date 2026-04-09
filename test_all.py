@@ -10,4 +10,4 @@ for t in tests:
 	exs.extend(m.exAll)
 
 for E in exs:
-	E().run(PrettyPrint=False)
+	E().run()

@@ -19,7 +19,7 @@ cycle_of_3 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}1")
 cycle_of_4 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}[*]{*}1")
 double_double_bond = mod.Graph.fromDFS("[*]{e(p(p(0)))}[*]{e(p(p(0)))}[*]")
 non_chemical_patterns = [cycle_of_3, cycle_of_4, double_double_bond]
-removed_graphs = set()
+forbidden_sub_graphs = set()
 
 
 def termFromGraph(g):
@@ -211,7 +211,7 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 							for pattern in non_chemical_patterns:
 								if pattern.monomorphism(v.graph, labelSettings=ls) > 0:
 									contains_non_chemical_pattern = True
-									removed_graphs.add(v.graph)
+									forbidden_sub_graphs.add(v.graph)
 									break
 								
 						if contains_non_chemical_pattern:
@@ -311,7 +311,7 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 		valMap[e] = min(vals)
 
 	flow = mod.hyperflow.Model(dg, ilpSolver="CPLEX")
-	for g in removed_graphs:
+	for g in forbidden_sub_graphs:
 		if dg.findVertex(g):
 			flow.addConstraint(mod.vertex[g] == 0)
 	if maxNumSplits is not None:
@@ -336,10 +336,10 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 	for e in dg.edges:
 		if not e.inverse.isNull():
 			flow.addConstraint(mod.isBothReverseUsed[e] == 0)
-		m = valMap[e] + valLowerBound
-		m *= valScale
-		assert m >= 0
-		m = int(m)
+		m = valMap[e] #+ valLowerBound
+		# m *= valScale
+		# assert m >= 0
+		# m = int(m)
 
 		obj += mod.isEdgeUsed[e] * m
 	flow.objectiveFunction = obj
@@ -570,7 +570,7 @@ ionPotential = {
 ###########################
 
 class Instance:
-	def run(self, prettyPrint) -> None:
+	def run(self, prettyPrint=False) -> None:
 		msgPrefix = f"Instance.run({self.name}):"
 		SIZE_LIMIT = getattr(self, "size_limit", 3)
 		ITERATION_LIMIT = getattr(self, "iteration_limit", 2)

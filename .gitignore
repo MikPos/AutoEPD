@@ -1,9 +1,13 @@
 out/
 summary*/
-long_klaus*/
-one_directional_results/
-Old Results/
-networkx*/
+flows/
+tex_files/
+old_summaries*/
+figures_for_aeticles/
+DG_dumps/
+test*.py
+*plots*.py
+*.zip
 *.txt
 *.pdf
 __pycache__
