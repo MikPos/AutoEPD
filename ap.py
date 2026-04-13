@@ -2,7 +2,7 @@ import itertools
 import subprocess
 import random
 import mod
-from mod import LabelSettings, LabelType, LabelRelation, BondType
+from mod import LabelSettings, LabelType, LabelRelation, BondType, causality
 
 from typing import Optional
 
@@ -25,6 +25,10 @@ forbidden_sub_graphs = set()
 
 
 def termFromGraph(g):
+	"""
+	Takes a mod graph in direct formatting as an argument.
+	Returns the same graph with labels converted to term formatting.
+	"""
 	s = "graph [\n"
 	for v in g.vertices:
 		s += 'node [ id %d label "a(%s, %d)" ]' % (v.id, v.atomId.symbol, v.charge)
@@ -34,6 +38,10 @@ def termFromGraph(g):
 	return mod.Graph.fromGMLString(s, name=g.name + ", term", add=False)
 
 def decodeVertexLabel(l):
+	"""
+	Take a string representing an vertex in term formatting as an argument.
+	Returns the string decoded from term to direct formatting.
+	"""
 	assert l.startswith("a(")
 	assert l.endswith(")")
 	l = l[2:-1].split(", ")
@@ -46,6 +54,10 @@ def decodeVertexLabel(l):
 	return lab
 
 def decodeEdgeLabel(l):
+	"""
+	Take a string representing an edge in term formatting as an argument.
+	Returns the string decoded from term to direct formatting.
+	"""
 	assert l.startswith("e(")
 	assert l.endswith(")")
 	l = l[2:-1]
@@ -62,6 +74,10 @@ def decodeEdgeLabel(l):
 	return bt
 
 def graphFromTerm(g):
+	"""
+	Takes a mod graph in term formatting as an argument.
+	Returns the same graph with labels converted to direct formatting.
+	"""
 	s = "graph [\n"
 	for v in g.vertices:
 		s += 'node [ id %d label "%s" ]\n' % (v.id, decodeVertexLabel(v.stringLabel))
@@ -71,6 +87,9 @@ def graphFromTerm(g):
 	return mod.Graph.fromGMLString(s, name=g.name + ", string", add=False)
 
 def makeRuleFromVertexMap(vMap):
+	"""
+	Help Text
+	"""
 	left = ""
 	right = ""
 	# Vertices
@@ -126,6 +145,16 @@ def makeRuleFromVertexMap(vMap):
 	return s
 
 def dgProject(dg, gMap, withEdges=True):
+	"""
+	Takes a DiGraph and a Graph Map, both containing vertices and edges in term formatting as arguments.
+	Optional Argument: withEdges -> Boolean. Default to True. Can be disabled to not create an Edge Map.
+
+	Returns a new DiGraph along with a new Graph Map and Edge Map all with direct label formatting.
+
+	The function rebuilds the DiGraph and Graph Maps with direct labels rather than the origianl term labels.
+	It also constructs an Edge Map that uses the decoded labels.
+
+	"""
 	graphs = {}
 	for v in dg.vertices:
 		graph = gMap(v.graph)
@@ -163,22 +192,29 @@ def dgProject(dg, gMap, withEdges=True):
 	return dgNew, graphMap, edgeMap
 
 
-def allPartitions(molecule):
-	def split(molecule, i, component1, component2):
-		if i == len(molecule):
-			yield component1, component2
+def allPartitions(graph_set):
+	"""
+	Takes a state within a graph expansion state space as an argument.
+	Returns a list of all possible pairs of subsets of the state, where each pair of subsets contains exactly all graphs within the state.
+	"""
+	def split(graph_set, i, subset_1, subset_2):
+		if i == len(graph_set):
+			yield subset_1, subset_2
 			return
-		component1.append(molecule[i])
-		yield from split(molecule, i + 1, component1, component2)
-		component1.pop()
-		component2.append(molecule[i])
-		yield from split(molecule, i + 1, component1, component2)
-		component2.pop()
-	yield from split(molecule, 0, [], [])
+		subset_1.append(graph_set[i])
+		yield from split(graph_set, i + 1, subset_1, subset_2)
+		subset_1.pop()
+		subset_2.append(graph_set[i])
+		yield from split(graph_set, i + 1, subset_1, subset_2)
+		subset_2.pop()
+	yield from split(graph_set, 0, [], [])
 
 
 
 def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
+	"""
+	Help Text
+	"""
 	result = []
 	def addSeenGraphs(graph_set):
 		t = tuple(sorted(graph_set, key=lambda g: g.id))
@@ -236,6 +272,9 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 
 
 def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None, msgName: Optional[str]):
+	"""
+	Help Text
+	"""
 	msgPrefix = None if msgName is None else f"   makeDG({msgName}):"
 	seen = set()
 	dg = mod.DG(graphDatabase=graphDatabase, labelSettings=ls)
@@ -274,6 +313,9 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 #############################
 
 def loadPartialCharges(dgData):
+	"""
+	Help Text
+	"""
 	dgString = dgData.dgString
 	graphMap = dgData.graphMap
 	partial_charge_graph_map_string = {}
@@ -303,7 +345,10 @@ def loadPartialCharges(dgData):
 ###
 # Not yet edited:
 ###
-def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
+def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, maxNumSplits=None):
+	"""
+	Help Text
+	"""
 	dg = dgData.dg
 	valLowerBound = ruleData.atomVals.lowerBound
 	valScale = ruleData.atomVals.scale
@@ -342,10 +387,12 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 	for e in dg.edges:
 		if not e.inverse.isNull():
 			flow.addConstraint(mod.isBothReverseUsed[e] == 0)
-		m = valMap[e] #+ valLowerBound
-		# m *= valScale
-		# assert m >= 0
-		# m = int(m)
+		m = valMap[e]
+		if useComplexObjFunction:
+			m += valLowerBound
+			m *= valScale
+			assert m >= 0
+			m = int(m)
 
 		obj += mod.isEdgeUsed[e] * m
 	flow.objectiveFunction = obj
@@ -358,6 +405,9 @@ def calcPathways(*, ruleData, dgData, sources, targets, maxNumSplits=None):
 
 
 def printSolutions(*, ruleData, dgData, flowData, prettyPrint):
+	"""
+	Help Text
+	"""
 	atomValString = ruleData.atomVals.atomValString
 	dgString = dgData.dgString
 	graphMap = dgData.graphMap
@@ -443,6 +493,9 @@ reverse_rule_map = {
 }
 
 def chargeSeparation():
+	"""
+	Help Text?
+	"""
 	class RuleData(object):
 		def __init__(self, rules):
 			self.rules = rules
@@ -473,6 +526,9 @@ def chargeSeparation():
 	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond])
 
 def getOutEdges(dg, molecules):
+  """
+	Help Text
+	"""
   assert dg
   molecules = list(sorted(molecules))
   result = []
@@ -486,16 +542,22 @@ def getOutEdges(dg, molecules):
 ###############################
 # Partial Charge Calculation: #
 ###############################
-def computePartialCharge():
-	return random.random()
-
 def computeAllCharges(molecule):
+	"""
+	Takes a mod graph as an argument.
+	Returns a dictionary containing the partial charges associated with each vertex in the graph.
+	Dictionary format:
+	- vertex id -> partial charge
+	"""
 	charges = {}
 	for vertex in molecule.vertices:
 		charges[str(vertex.id)] = round(calcGasteigerCharge(vertex), 2)
 	return charges
 
 def calcGasteigerCharge(vertex):
+	"""
+	Help Text
+	"""
 	total = 0
 
 	for iteration in range(1,7):
@@ -523,13 +585,25 @@ def calcGasteigerCharge(vertex):
 	return total
 
 def getElectronegativity(label):
+	"""
+	Takes an atomic label as an argument and returns the associated electronnegativity.
+	During the process it removes any charge indication from the label string eg.: "+" or "-"
+	"""
 	sum = electronegativity[label.replace("1-", "").replace("1+", "")]
 	return sum
 
 def getIonPotential(label):
+	"""
+	Takes an atomic label as an argument and returns the associated ion potential.
+	During the process it removes any charge indication from the label string eg.: "+" or "-"
+	"""
 	return ionPotential[label.replace("1-", "").replace("1+", "")]
 
 def seperateNeighbors(edges):
+	"""
+	Takes a range of incident edges from a mod vertex as an argument.
+	Returns two lists of vertex id's, one with id's of vertices with higher electronegativity, and and one with id's of vertices with lower electronegativity.
+	"""
 	lower_electronegativity_neighbors = []
 	higher_electronegativity_neighbors = []
 	for edge in edges:
@@ -571,15 +645,29 @@ ionPotential = {
 	"I": 10.45,
 }
 
-###########################
-# Testing Instance Class: #
-###########################
+def checkRealisable(s: mod.hyperflow.Solution) -> bool:
+	"""
+	Help Text
+	"""
+	return causality.RealisabilityQuery(s.model.dg).findDAG(s) is not None
+
+
+###################
+# Instance Class: #
+###################
 
 class Instance:
-	def run(self, prettyPrint=False) -> None:
+	def run(self, prettyPrint=False, useComplexObjectiveFunction=False) -> None:
+		"""
+		Runs an instance of the problem, based on SMILES strings defined in the class being run.
+		
+		Optional Arguments:
+		- prettyPrint -> Boolean. False by default. Removes additional print statements for testing and performance checking.
+		- useComplexObjectiveFunction -> Boolean. False by default. Changes the objective function used to find a flow solution within the hypergraph.
+		"""
 		msgPrefix = f"Instance.run({self.name}):"
 		SIZE_LIMIT = getattr(self, "size_limit", 3)
-		ITERATION_LIMIT = getattr(self, "iteration_limit", 2)
+		ITERATION_LIMIT = getattr(self, "iteration_limit", 3)
 		print(msgPrefix, f"size_limit={SIZE_LIMIT}, iteration_limit={ITERATION_LIMIT}")
 
 		import time
@@ -622,6 +710,7 @@ class Instance:
 		flowData = calcPathways(
 			ruleData=ruleData, dgData=dgData,
 			sources=self.sources, targets=self.targets,
+			useComplexObjFunction=useComplexObjectiveFunction
 		)
 		flow = flowData.flow
 		flow.addEnumerationVar(mod.isEdgeUsed)
@@ -629,6 +718,9 @@ class Instance:
 		flow.findSolutions(verbosity=1, maxNumSolutions=1)
 		flow.solutions.list()
 
+		for solution in flow.solutions:
+			checkRealisable(solution)
+		
 		timeFlow = time.perf_counter()
 		print("-" * 80)
 		print(msgPrefix, f"time {timeFlow - timePartChg} flow")

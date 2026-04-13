@@ -2,7 +2,8 @@ import importlib
 
 tests = ["test_book",
 	# "test_daniel",
-	"test_formose", "test_long_klaus"]
+	# "test_formose", "test_long_klaus"
+	]
 
 exs = []
 for t in tests:

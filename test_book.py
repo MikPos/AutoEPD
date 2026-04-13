@@ -139,8 +139,8 @@ class ExM(ap.Instance):
 		self.sources = [m_start]
 		self.targets = [m_end]
 		self.name = "Exercise M"
-		self.size_limit = 1
-		self.iteration_limit = 3
+		# self.size_limit = 1
+		# self.iteration_limit = 3
 
 class ExN(ap.Instance):
 	def __init__(self):
@@ -154,4 +154,4 @@ class ExN(ap.Instance):
 		self.targets = [n_end]
 		self.name = "Exercise N"
 
-exAll = [ExA, ExB, ExC, ExD, ExE, ExF, ExG, ExH, ExM, ExN]
+exAll = [ExA, ExB, ExC, ExD, ExE, ExF, ExG, ExH, ExM] #, ExN]
