@@ -26,6 +26,8 @@ forbidden_sub_graphs = set()
 
 def termFromGraph(g):
 	"""
+	Convert a mod graph into term formatting from direct formatting.
+	-----
 	Takes a mod graph in direct formatting as an argument.
 	Returns the same graph with labels converted to term formatting.
 	"""
@@ -39,6 +41,8 @@ def termFromGraph(g):
 
 def decodeVertexLabel(l):
 	"""
+	Convertes a vertex stringLabel from term formatting to direct formatting.
+	-----
 	Take a string representing an vertex in term formatting as an argument.
 	Returns the string decoded from term to direct formatting.
 	"""
@@ -55,6 +59,8 @@ def decodeVertexLabel(l):
 
 def decodeEdgeLabel(l):
 	"""
+	Converts a edge stringLabel from term formatting to direct formatting.
+	-----
 	Take a string representing an edge in term formatting as an argument.
 	Returns the string decoded from term to direct formatting.
 	"""
@@ -75,6 +81,8 @@ def decodeEdgeLabel(l):
 
 def graphFromTerm(g):
 	"""
+	Converts a mod graph from term formatting to direct formatting.
+	-----
 	Takes a mod graph in term formatting as an argument.
 	Returns the same graph with labels converted to direct formatting.
 	"""
@@ -88,7 +96,10 @@ def graphFromTerm(g):
 
 def makeRuleFromVertexMap(vMap):
 	"""
-	Help Text
+	Uses a vertex map to construct a rule in direct formatting, from a rule in term formatting.
+	-----
+	Takes in a vertex map, mapping vertices across a DPO rule as an argument.
+	Returns ??
 	"""
 	left = ""
 	right = ""
@@ -146,6 +157,8 @@ def makeRuleFromVertexMap(vMap):
 
 def dgProject(dg, gMap, withEdges=True):
 	"""
+	Converts the created DiGraph in term formatting to a DiGraph in direct formatting.
+	-----
 	Takes a DiGraph and a Graph Map, both containing vertices and edges in term formatting as arguments.
 	Optional Argument: withEdges -> Boolean. Default to True. Can be disabled to not create an Edge Map.
 
@@ -194,6 +207,8 @@ def dgProject(dg, gMap, withEdges=True):
 
 def allPartitions(graph_set):
 	"""
+	Creates all possible pairs of subests of graphs of a given set of graphs.
+	-----
 	Takes a state within a graph expansion state space as an argument.
 	Returns a list of all possible pairs of subsets of the state, where each pair of subsets contains exactly all graphs within the state.
 	"""
@@ -213,6 +228,8 @@ def allPartitions(graph_set):
 
 def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 	"""
+	Computes the next iteration of graphs for the DiGraph expansion from the rules and current graphs.
+	-----
 	Help Text
 	"""
 	result = []
@@ -273,6 +290,9 @@ def computeNextIteration(prev, rules, build, dg, sizeLimit, seen, direction):
 
 def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None, withEdgeProjection=True, targets=None, msgName: Optional[str]):
 	"""
+	Constructs a DiGraph representing a chemical space, based on rules and source and potential target molecules.
+	The DiGraph can expand indeffinetely or be limited by a size and or iteration limit.
+	-----
 	Help Text
 	"""
 	msgPrefix = None if msgName is None else f"   makeDG({msgName}):"
@@ -314,7 +334,16 @@ def makeDG(*, rules, sources, graphDatabase, sizeLimit=None, iterationLimit=None
 
 def loadPartialCharges(dgData):
 	"""
-	Help Text
+	Computes and maps the partial charges for each graph in the DiGraph to the respective graph.
+	-----
+	Takes the dgData data format from the construction of the DiGraph as an input.
+	Returns a new data fromt containing partial charge information for the entire DiGraph.
+
+	Data Format: (AtomValues)
+	- atomVal -> dictionary mapping vertex in the DiGraph to a partial charge dictionary (vertex -> charge).
+	- atomValString -> ???
+	- lowerBound -> value required to ensure a positive value for the partial charge heuristic (if complex obj. func.)
+	- scale -> values required to ensure larger value difference for the partial carge heuristic (if complex obj. func.)
 	"""
 	dgString = dgData.dgString
 	graphMap = dgData.graphMap
@@ -347,6 +376,8 @@ def loadPartialCharges(dgData):
 ###
 def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, maxNumSplits=None):
 	"""
+	Prepares an objective function and hyperedge weights for finding a flow solution in the DiGraph.
+	-----
 	Help Text
 	"""
 	dg = dgData.dg
@@ -406,6 +437,8 @@ def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, m
 
 def printSolutions(*, ruleData, dgData, flowData, prettyPrint):
 	"""
+	Formats and prints the DiGraph to a Summary PDF file.
+	-----
 	Help Text
 	"""
 	atomValString = ruleData.atomVals.atomValString
@@ -494,6 +527,8 @@ reverse_rule_map = {
 
 def chargeSeparation():
 	"""
+	???
+	-----
 	Help Text?
 	"""
 	class RuleData(object):
@@ -525,16 +560,18 @@ def chargeSeparation():
 				assert False
 	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond])
 
-def getOutEdges(dg, molecules):
+def getOutEdges(dg, graphs):
   """
-	Help Text
-	"""
+  Finds the currently existing hyperedges in the DiGraph where the given set of graphs are sources.
+  -----
+  Help Text
+  """
   assert dg
-  molecules = list(sorted(molecules))
+  graphs = list(sorted(graphs))
   result = []
   for edge in dg.edges:
     graph_set_candidate = list(sorted(vertex.graph for vertex in edge.sources))
-    if graph_set_candidate == molecules:
+    if graph_set_candidate == graphs:
       result.append(edge)
   return result
 
@@ -544,6 +581,8 @@ def getOutEdges(dg, molecules):
 ###############################
 def computeAllCharges(molecule):
 	"""
+	Calculates all partial charges for a given molecular graph.
+	-----
 	Takes a mod graph as an argument.
 	Returns a dictionary containing the partial charges associated with each vertex in the graph.
 	Dictionary format:
@@ -556,6 +595,8 @@ def computeAllCharges(molecule):
 
 def calcGasteigerCharge(vertex):
 	"""
+	Calculates the Gasteiger Charge for a given vertex.
+	-----
 	Help Text
 	"""
 	total = 0
@@ -586,6 +627,8 @@ def calcGasteigerCharge(vertex):
 
 def getElectronegativity(label):
 	"""
+	Finds the given Electronegativity for a given atomic symbol.
+	-----
 	Takes an atomic label as an argument and returns the associated electronnegativity.
 	During the process it removes any charge indication from the label string eg.: "+" or "-"
 	"""
@@ -594,6 +637,8 @@ def getElectronegativity(label):
 
 def getIonPotential(label):
 	"""
+	Finds the matching Ion Potential for a given atomic symbol.
+	-----
 	Takes an atomic label as an argument and returns the associated ion potential.
 	During the process it removes any charge indication from the label string eg.: "+" or "-"
 	"""
@@ -601,6 +646,8 @@ def getIonPotential(label):
 
 def seperateNeighbors(edges):
 	"""
+	Seperates the nighbors of a vertex into lower and higher electronnegativity lists.
+	-----
 	Takes a range of incident edges from a mod vertex as an argument.
 	Returns two lists of vertex id's, one with id's of vertices with higher electronegativity, and and one with id's of vertices with lower electronegativity.
 	"""
@@ -647,6 +694,8 @@ ionPotential = {
 
 def checkRealisable(s: mod.hyperflow.Solution) -> bool:
 	"""
+	
+	-----
 	Help Text
 	"""
 	return causality.RealisabilityQuery(s.model.dg).findDAG(s) is not None
@@ -659,6 +708,8 @@ def checkRealisable(s: mod.hyperflow.Solution) -> bool:
 class Instance:
 	def run(self, prettyPrint=False, useComplexObjectiveFunction=False) -> None:
 		"""
+		
+		-----
 		Runs an instance of the problem, based on SMILES strings defined in the class being run.
 		
 		Optional Arguments:
