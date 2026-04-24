@@ -562,6 +562,9 @@ def chargeSeparation():
 				else:
 					assert False
 			elif scheme == "stadler":
+				res = 0.0
+				for vG in vMap.left.vertices:
+					vH = vMap.map[vG]
 				assert False
 			else:
 				assert False
