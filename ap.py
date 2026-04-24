@@ -342,8 +342,6 @@ def loadPartialCharges(dgData):
 	Data Format: (AtomValues)
 	- atomVal -> dictionary mapping vertex in the DiGraph to a partial charge dictionary (vertex -> charge).
 	- atomValString -> ???
-	- lowerBound -> value required to ensure a positive value for the partial charge heuristic (if complex obj. func.)
-	- scale -> values required to ensure larger value difference for the partial carge heuristic (if complex obj. func.)
 	"""
 	dgString = dgData.dgString
 	graphMap = dgData.graphMap
@@ -366,30 +364,27 @@ def loadPartialCharges(dgData):
 	res = AtomValues()
 	res.atomVal = partial_charge_graph_map
 	res.atomValString = partial_charge_graph_map_string
-	res.lowerBound = 200
-	res.scale = 100
 	return res
 
 
 ###
 # Not yet edited:
 ###
-def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, maxNumSplits=None):
+def calcPathways(*, ruleData, dgData, sources, targets,
+		reactionScheme: str, objFunctionScheme: str, maxNumSplits=None):
 	"""
 	Prepares an objective function and hyperedge weights for finding a flow solution in the DiGraph.
 	-----
 	Help Text
 	"""
 	dg = dgData.dg
-	valLowerBound = ruleData.atomVals.lowerBound
-	valScale = ruleData.atomVals.scale
 	
 	valMap = {}
 	for e in dg.edges:
 		vms = mod.DGVertexMapper(e, upToIsomorphismGDH=True, rightLimit=1)
 		vals = []
 		for vm in vms:
-			vals.append(ruleData.eval(vm.rule, vm))
+			vals.append(ruleData.eval(vm.rule, vm, reactionScheme))
 		assert len(vals) == 1, vals
 		valMap[e] = vals[0]
 
@@ -415,19 +410,24 @@ def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, m
 		flow.addConstraint(mod.inFlow[a] >= sources.count(a))
 	for a in tarsUnique:
 		flow.addSink(a)
-	obj = mod.hyperflow.LinExp()
 	for e in dg.edges:
 		if not e.inverse.isNull():
 			flow.addConstraint(mod.isBothReverseUsed[e] == 0)
 
-		m = valMap[e]
-		if useComplexObjFunction:
-			m += valLowerBound
-			m *= valScale
-			assert m >= 0
-			m = int(m)
+	def makeCoefInt(c):
+		return int(c * 1000)
 
-		obj += mod.isEdgeUsed[e] * m
+	if objFunctionScheme == "orig":
+		obj = mod.hyperflow.LinExp()
+		for e in dg.edges:
+			m = valMap[e]
+			m += 200
+			obj += mod.isEdgeUsed[e] * makeCoefInt(m)
+	elif objFunctionScheme == "TODO":
+		assert False
+	else:
+		assert False, objFunctionScheme
+
 	flow.objectiveFunction = obj
 	class FlowData:
 		pass
@@ -537,27 +537,32 @@ def chargeSeparation():
 		def __init__(self, rules):
 			self.rules = rules
 			self.atomVals = None
-		def eval(self, r, vMap):
+		def eval(self, r, vMap, scheme: str):
 			assert self.atomVals is not None
 			atomVal = self.atomVals.atomVal
 			def check(a, b):
 				assert not a.isNull()
 				assert not b.isNull()
 				assert a.stringLabel[:4] == b.stringLabel[:4]
-			v0 = r.getVertexFromExternalId(0)
-			v1 = r.getVertexFromExternalId(1)
-			v0l = vMap.match[v0.left].vertex
-			v0r = vMap.comatch[v0.right].vertex
-			v1l = vMap.match[v1.left].vertex
-			v1r = vMap.comatch[v1.right].vertex
-			check(v0l, v0r)
-			check(v1l, v1r)
-			val0 = atomVal[v0l.graph][v0l]
-			val1 = atomVal[v1l.graph][v1l]
-			if r in [breakSingleBond, breakDoubleBond]:
-				return val1 - val0
-			elif r in [formSingleBond, formDoubleBond]:
-				return -(val0 - val1)
+			if scheme == "orig":
+				v0 = r.getVertexFromExternalId(0)
+				v1 = r.getVertexFromExternalId(1)
+				v0l = vMap.match[v0.left].vertex
+				v0r = vMap.comatch[v0.right].vertex
+				v1l = vMap.match[v1.left].vertex
+				v1r = vMap.comatch[v1.right].vertex
+				check(v0l, v0r)
+				check(v1l, v1r)
+				val0 = atomVal[v0l.graph][v0l]
+				val1 = atomVal[v1l.graph][v1l]
+				if r in [breakSingleBond, breakDoubleBond]:
+					return val1 - val0
+				elif r in [formSingleBond, formDoubleBond]:
+					return -(val0 - val1)
+				else:
+					assert False
+			elif scheme == "stadler":
+				assert False
 			else:
 				assert False
 	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond])
@@ -694,7 +699,7 @@ ionPotential = {
 	"I": 10.45,
 }
 
-def checkRealisable(s: mod.hyperflow.Solution) -> bool:
+def isRealisable(s: mod.hyperflow.Solution) -> bool:
 	"""
 	
 	-----
@@ -708,7 +713,9 @@ def checkRealisable(s: mod.hyperflow.Solution) -> bool:
 ###################
 
 class Instance:
-	def run(self, prettyPrint=False, useComplexObjectiveFunction=False) -> None:
+	def run(self, *, prettyPrint: bool=False,
+			objFunctionScheme: str="orig", reactionScheme: str="orig",
+			checkRealisability: bool=False) -> None:
 		"""
 		
 		-----
@@ -763,16 +770,14 @@ class Instance:
 		flowData = calcPathways(
 			ruleData=ruleData, dgData=dgData,
 			sources=self.sources, targets=self.targets,
-			useComplexObjFunction=useComplexObjectiveFunction
+			reactionScheme=reactionScheme,
+			objFunctionScheme=objFunctionScheme
 		)
 		flow = flowData.flow
 		flow.addEnumerationVar(mod.isEdgeUsed)
 
 		flow.findSolutions(verbosity=1, maxNumSolutions=1)
 		flow.solutions.list()
-
-		for solution in flow.solutions:
-			checkRealisable(solution)
 		
 		timeFlow = time.perf_counter()
 		print("-" * 80)
@@ -789,3 +794,7 @@ class Instance:
 
 
 		print(msgPrefix, f"time {timePrint - timeStart} total")
+
+		if checkRealisability:
+			for solution in flow.solutions:
+				assert iskRealisable(solution)
