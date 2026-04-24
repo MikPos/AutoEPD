@@ -386,11 +386,12 @@ def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, m
 	
 	valMap = {}
 	for e in dg.edges:
-		vms = mod.DGVertexMapper(e, upToIsomorphismGDH = True, rightLimit = 1)
+		vms = mod.DGVertexMapper(e, upToIsomorphismGDH=True, rightLimit=1)
 		vals = []
 		for vm in vms:
-			vals.append(ruleData.eval(vm.rule ,vm))
-		valMap[e] = min(vals)
+			vals.append(ruleData.eval(vm.rule, vm))
+		assert len(vals) == 1, vals
+		valMap[e] = vals[0]
 
 	flow = mod.hyperflow.Model(dg, ilpSolver="CPLEX")
 	for g in forbidden_sub_graphs:
@@ -418,6 +419,7 @@ def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, m
 	for e in dg.edges:
 		if not e.inverse.isNull():
 			flow.addConstraint(mod.isBothReverseUsed[e] == 0)
+
 		m = valMap[e]
 		if useComplexObjFunction:
 			m += valLowerBound
@@ -427,7 +429,7 @@ def calcPathways(*, ruleData, dgData, sources, targets, useComplexObjFunction, m
 
 		obj += mod.isEdgeUsed[e] * m
 	flow.objectiveFunction = obj
-	class FlowData(object):
+	class FlowData:
 		pass
 	res = FlowData()
 	res.flow = flow
@@ -531,7 +533,7 @@ def chargeSeparation():
 	-----
 	Help Text?
 	"""
-	class RuleData(object):
+	class RuleData:
 		def __init__(self, rules):
 			self.rules = rules
 			self.atomVals = None
