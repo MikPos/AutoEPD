@@ -693,11 +693,8 @@ def chargeSeparation():
 			elif scheme == "stadler":
 				res = 0.0
 				for vG in vMap.map.domain.vertices:
-					vL = vG.vertex
-					for vH in vMap.map.codomain.vertices:
-						vR = vH.vertex
-						if vR.id == vL.id:
-							res += abs(atomVal[vL.graph][vL] - atomVal[vR.graph][vR])
+					vH = vMap.map[vG]
+					res += abs(atomVal[vG.graph][vG.vertex] - atomVal[vH.graph][vH.vertex])
 				return res
 			elif scheme == "length":
 				res = 0.0
