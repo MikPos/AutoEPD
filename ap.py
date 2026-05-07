@@ -20,7 +20,11 @@ termBondFromBondType = {
 cycle_of_3 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}1")
 cycle_of_4 = mod.Graph.fromDFS("[*]1{*}[*]{*}[*]{*}[*]{*}1")
 double_double_bond = mod.Graph.fromDFS("[*]{e(p(p(0)))}[*]{e(p(p(0)))}[*]")
-non_chemical_patterns = [cycle_of_3, cycle_of_4, double_double_bond]
+negative_hydrogen = mod.Graph.fromDFS("[a(H,-1)]")
+carbon_negatives_bond = mod.Graph.fromDFS("[a(C,-1)]{*}[a(C,-1)]")
+carbon_positives_bond = mod.Graph.fromDFS("[a(C,1)]{*}[a(C,1)]")
+positve_oxygen_negative_carbon = mod.Graph.fromDFS("[a(O,1)]{*}[a(C,-1)]")
+non_chemical_patterns = [cycle_of_3, cycle_of_4, double_double_bond, negative_hydrogen, carbon_positives_bond, carbon_negatives_bond, positve_oxygen_negative_carbon]
 forbidden_sub_graphs = set()
 
 
@@ -197,8 +201,8 @@ def dgProject(dg, gMap, withEdges=True):
 					d.left = [graphs[v.graph] for v in hyperedge.sources]
 					d.right = [graphs[v.graph] for v in hyperedge.targets]
 					d.rule = r
-				new_edge = b.addDerivation(d)
-			edgeMap[new_edge] = hyperedge
+					new_edge = b.addDerivation(d)
+					edgeMap[new_edge] = hyperedge
 	graphMap = {}
 	for old, new in graphs.items():
 		graphMap[new] = old
@@ -371,7 +375,7 @@ def loadPartialCharges(dgData):
 # Not yet edited:
 ###
 def calcPathways(*, ruleData, dgData, sources, targets,
-		reactionScheme: str, objFunctionScheme: str, maxNumSplits=None):
+		reactionScheme: str, objFunctionScheme: str, maxNumSplits=None, checkObjFunc=False):
 	"""
 	Prepares an objective function and hyperedge weights for finding a flow solution in the DiGraph.
 	-----
@@ -423,12 +427,28 @@ def calcPathways(*, ruleData, dgData, sources, targets,
 			m = valMap[e]
 			m += 200
 			obj += mod.isEdgeUsed[e] * makeCoefInt(m)
-	elif objFunctionScheme == "TODO":
-		assert False
+	elif objFunctionScheme == "stadler":
+		obj = mod.hyperflow.LinExp()
+		for e in dg.edges:
+			m = valMap[e]
+			obj += mod.isEdgeUsed[e] * makeCoefInt(m)
+	elif objFunctionScheme == "length":
+		obj = mod.hyperflow.LinExp()
+		obj += mod.isEdgeUsed
 	else:
 		assert False, objFunctionScheme
 
 	flow.objectiveFunction = obj
+	if checkObjFunc:
+		print("---------------------")
+		print("Value Map:")
+		print("---------------------")
+		for key, val in valMap.items():
+			print(str(key) + " -> " + str(val))
+		print("---------------------")
+		print("Objective Function:")
+		print("---------------------")
+		print(obj)
 	class FlowData:
 		pass
 	res = FlowData()
@@ -465,7 +485,7 @@ def printSolutions(*, ruleData, dgData, flowData, prettyPrint):
 		p.pushEdgeVisible(lambda e: s.eval(mod.edgeFlow[edgeMap[e]]) != 0)
 		if prettyPrint == False:
 			p.pushEdgeLabel(lambda e: ", ".join(r.name for r in edgeMap[e].rules))
-			p.pushEdgeLabel(lambda e: "%.2f" % valMap[edgeMap[e]])
+			# p.pushEdgeLabel(lambda e: "%.2f" % valMap[edgeMap[e]])
 		fDG, fCoords = dgString.print(p)
 
 		fName = "out/%d_%d_aux.tex" % (flow.id, s.id)
@@ -520,11 +540,120 @@ breakDoubleBond = mod.Rule.fromGMLString("""rule [
 ]""", add=False)
 formDoubleBond = breakDoubleBond.makeInverse()
 
+########################
+# Potential New Rules: #
+########################
+
+# Moving Positve Charge:
+formPositiveCharge = mod.Rule.fromGMLString("""rule [
+	ruleID "pushPositiveCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, 1)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, 1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+
+	]
+]""", add=False)
+breakPositiveCharge = formPositiveCharge.makeInverse()
+formDoublePositiveCharge = mod.Rule.fromGMLString("""rule [
+	ruleID "pushDoublePositiveCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, 1)" ]
+		edge [ source 0 target 1 label "e(p(p(_E)))" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, 1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+		edge [ source 0 target 1 label "e(p(_E))" ]
+	]
+]""", add=False)
+breakDoublePositiveCharge = formDoublePositiveCharge.makeInverse()
+
+# Moving Negative Charge:
+formNegativeCharge = mod.Rule.fromGMLString("""rule [
+	ruleID "formNegativeCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, -1)" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, -1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+	]
+]""", add=False)
+breakNegativeCharge = formNegativeCharge.makeInverse()
+formDoubleNegativeCharge = mod.Rule.fromGMLString("""rule [
+	ruleID "pushDoubleNegativeCharge"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(_S1, -1)" ]
+		edge [ source 0 target 1 label "e(p(p(_E)))" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, -1)" ]
+		node [ id 1 label "a(_S1, 0)" ]
+		edge [ source 0 target 1 label "e(p(_E))" ]
+	]
+]""", add=False)
+breakDoubleNegativeCharge = formDoubleNegativeCharge.makeInverse()
+
+# Lone Electron Pairs used as nucleophile:
+oxygenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
+	ruleID "oxygenLoneElectronPairs"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 1)" ]
+		node [ id 1 label "a(O, 0)" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(O, 1)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+
+	]
+]""", add=False)
+# reverseOxygenElectronPairs = oxygenLoneElectronPairs.makeInverse()
+nitrogenLoneElectronPairs = mod.Rule.fromGMLString("""rule [
+	ruleID "nitrogenLoneElectronPairs"
+	labelType "term"
+	left [
+		node [ id 0 label "a(_S0, 1)" ]
+		node [ id 1 label "a(N, 0)" ]
+	]
+	right [
+		node [ id 0 label "a(_S0, 0)" ]
+		node [ id 1 label "a(N, 1)" ]
+		edge [ source 0 target 1 label "e(p(0))" ]
+
+	]
+]""", add=False)
+# reverseNitrogenElectronPairs = nitrogenLoneElectronPairs.makeInverse()
+
 reverse_rule_map = {
+	formNegativeCharge.id: breakNegativeCharge,
+	breakNegativeCharge.id: formNegativeCharge,
+	formDoubleNegativeCharge.id: breakDoubleNegativeCharge,
+	breakDoubleNegativeCharge.id: formDoubleNegativeCharge,
+	formPositiveCharge.id: breakPositiveCharge,
+	breakPositiveCharge.id: formPositiveCharge,
+	formDoublePositiveCharge.id: breakDoublePositiveCharge,
+	breakDoublePositiveCharge.id: formDoublePositiveCharge,
 	formSingleBond.id: breakSingleBond,
 	breakSingleBond.id: formSingleBond,
 	formDoubleBond.id: breakDoubleBond,
-	breakDoubleBond.id: formDoubleBond
+	breakDoubleBond.id: formDoubleBond,
+	# nitrogenLoneElectronPairs.id: breakSingleBond,
+	# oxygenLoneElectronPairs.id: breakSingleBond
 }
 
 def chargeSeparation():
@@ -555,20 +684,30 @@ def chargeSeparation():
 				check(v1l, v1r)
 				val0 = atomVal[v0l.graph][v0l]
 				val1 = atomVal[v1l.graph][v1l]
-				if r in [breakSingleBond, breakDoubleBond]:
+				if r in [breakSingleBond, breakDoubleBond, breakPositiveCharge, breakDoublePositiveCharge, breakNegativeCharge, breakDoubleNegativeCharge]: #, oxygenLoneElectronPairs, nitrogenLoneElectronPairs]:
 					return val1 - val0
-				elif r in [formSingleBond, formDoubleBond]:
+				elif r in [formSingleBond, formDoubleBond, formPositiveCharge, formDoublePositiveCharge, formNegativeCharge, formDoubleNegativeCharge]:
 					return -(val0 - val1)
 				else:
 					assert False
 			elif scheme == "stadler":
 				res = 0.0
-				for vG in vMap.left.vertices:
-					vH = vMap.map[vG]
-				assert False
+				for vG in vMap.map.domain.vertices:
+					vL = vG.vertex
+					for vH in vMap.map.codomain.vertices:
+						vR = vH.vertex
+						if vR.id == vL.id:
+							res += abs(atomVal[vL.graph][vL] - atomVal[vR.graph][vR])
+				return res
+			elif scheme == "length":
+				res = 0.0
 			else:
 				assert False
-	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond])
+	return RuleData([breakSingleBond, formSingleBond, breakDoubleBond, formDoubleBond, 
+				#   breakPositiveCharge, breakDoublePositiveCharge, breakNegativeCharge, breakDoubleNegativeCharge, 
+				# # oxygenLoneElectronPairs, nitrogenLoneElectronPairs,
+				#   formPositiveCharge, formDoublePositiveCharge, formNegativeCharge, formDoubleNegativeCharge
+				  ])
 
 def getOutEdges(dg, graphs):
   """
@@ -718,7 +857,7 @@ def isRealisable(s: mod.hyperflow.Solution) -> bool:
 class Instance:
 	def run(self, *, prettyPrint: bool=False,
 			objFunctionScheme: str="orig", reactionScheme: str="orig",
-			checkRealisability: bool=False) -> None:
+			checkRealisability: bool=False, checkObjFunc: bool=False) -> None:
 		"""
 		
 		-----
@@ -774,7 +913,8 @@ class Instance:
 			ruleData=ruleData, dgData=dgData,
 			sources=self.sources, targets=self.targets,
 			reactionScheme=reactionScheme,
-			objFunctionScheme=objFunctionScheme
+			objFunctionScheme=objFunctionScheme,
+			checkObjFunc=checkObjFunc
 		)
 		flow = flowData.flow
 		flow.addEnumerationVar(mod.isEdgeUsed)
@@ -800,4 +940,4 @@ class Instance:
 
 		if checkRealisability:
 			for solution in flow.solutions:
-				assert iskRealisable(solution)
+				assert isRealisable(solution)

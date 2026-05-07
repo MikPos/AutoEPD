@@ -8,7 +8,10 @@ tests = ["test_book",
 exs = []
 for t in tests:
 	m = importlib.import_module(t)
-	exs.extend(m.exAll)
+	# exs.extend(m.exAll)
+	exs.extend(m.exTestable)
 
 for E in exs:
-	E().run()
+	# E().run(objFunctionScheme="stadler", reactionScheme="stadler")
+	E().run(objFunctionScheme="stadler", reactionScheme="stadler", checkObjFunc=True)
+	# E().run()

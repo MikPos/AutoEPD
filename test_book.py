@@ -7,7 +7,11 @@ import mod
 #############################
 # Exercises from the Levy book on Arrow Pushing.
 # Within a script, instanciate the classes to run, and run them with the ".run()" method.
-#
+# 
+# Exercise D uses an Oxygen lone pair within its reaction chain. It cannot be emulated with the simple rule set.
+# 
+# Exercise F and G both contain only a single step, and since that step doesn't match our rules we cannot solve it.
+# 
 # Exercises I, J and K are skipped so far due to lack of Radical support.
 
 class ExA(ap.Instance):
@@ -153,5 +157,9 @@ class ExN(ap.Instance):
 		self.sources = [n_start]
 		self.targets = [n_end]
 		self.name = "Exercise N"
+		self.size_limit = 1
+		# self.iteration_limit = 2
 
-exAll = [ExA, ExB, ExC, ExD, ExE, ExF, ExG, ExH, ExM] #, ExN]
+exAll = [ExA, ExB, ExC, ExD, ExE, ExF, ExG, ExH, ExM, ExN]
+exSolvable = [ExA, ExB, ExC, ExE, ExH, ExM]
+exTestable = [ExA]
