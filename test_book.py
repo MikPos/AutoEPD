@@ -29,6 +29,8 @@ class ExA(ap.Instance):
 		self.sources = [a_start_1, a_start_2]
 		self.targets = [a_end_1, a_end_2]
 		self.name = "Exercise A"
+		self.size_limit = 3
+		self.iteration_limit = 2
 
 class ExB(ap.Instance):
 	def __init__(self):
@@ -143,8 +145,8 @@ class ExM(ap.Instance):
 		self.sources = [m_start]
 		self.targets = [m_end]
 		self.name = "Exercise M"
-		# self.size_limit = 1
-		# self.iteration_limit = 3
+		self.size_limit = 1
+		self.iteration_limit = 3
 
 class ExN(ap.Instance):
 	def __init__(self):
@@ -158,8 +160,8 @@ class ExN(ap.Instance):
 		self.targets = [n_end]
 		self.name = "Exercise N"
 		self.size_limit = 1
-		# self.iteration_limit = 2
+		self.iteration_limit = 2
 
 exAll = [ExA, ExB, ExC, ExD, ExE, ExF, ExG, ExH, ExM, ExN]
 exSolvable = [ExA, ExB, ExC, ExE, ExH, ExM]
-exTestable = [ExA]
+exTestable = [ExA, ExB, ExC]

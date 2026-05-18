@@ -1,13 +1,16 @@
 import itertools
 import subprocess
 import random
+import re
 import mod
 from mod import LabelSettings, LabelType, LabelRelation, BondType, causality
+
 
 from typing import Optional
 
 ls = LabelSettings(LabelType.Term, LabelRelation.Specialisation)
 lsString = LabelSettings(LabelType.String, LabelRelation.Specialisation)
+PARTIAL_CHARGE_DECIMALS = 3
 
 termBondFromBondType = {
 	BondType.Invalid: "__error1",
@@ -351,6 +354,8 @@ def loadPartialCharges(dgData):
 	graphMap = dgData.graphMap
 	partial_charge_graph_map_string = {}
 
+
+
 	for vertex in dgString.vertices:
 		all_partial_charges = computeAllCharges(vertex.graph)
 		partial_charge_graph_map_string[vertex.graph] = all_partial_charges
@@ -368,6 +373,8 @@ def loadPartialCharges(dgData):
 	res = AtomValues()
 	res.atomVal = partial_charge_graph_map
 	res.atomValString = partial_charge_graph_map_string
+	# for k,v in partial_charge_graph_map_string.items():
+	# 	print(str(k) + ": " + str(v))
 	return res
 
 
@@ -694,7 +701,7 @@ def chargeSeparation():
 				res = 0.0
 				for vG in vMap.map.domain.vertices:
 					vH = vMap.map[vG]
-					res += abs(atomVal[vG.graph][vG.vertex] - atomVal[vH.graph][vH.vertex])
+					res += abs(atomVal[vG.vertex.graph][vG.vertex] - atomVal[vH.vertex.graph][vH.vertex])
 				return res
 			elif scheme == "length":
 				res = 0.0
@@ -734,108 +741,128 @@ def computeAllCharges(molecule):
 	Dictionary format:
 	- vertex id -> partial charge
 	"""
-	charges = {}
-	for vertex in molecule.vertices:
-		charges[str(vertex.id)] = round(calcGasteigerCharge(vertex), 2)
-	return charges
+	return computeGasteigerCharges(molecule)
 
-def calcGasteigerCharge(vertex):
+def computeGasteigerCharges(molecule, iterations=12):
 	"""
-	Calculates the Gasteiger Charge for a given vertex.
-	-----
-	Help Text
+	Compute Gasteiger-Marsili PEOE sigma partial charges on a MØD graph.
+
+	The original method treats each atom's orbital electronegativity as a charge
+	dependent polynomial, chi(q) = a + bq + c(q*q). Starting from formal charges,
+	each iteration equalises neighboring orbital electronegativities by moving a
+	damped amount of charge from the lower-chi atom to the higher-chi atom. This
+	implementation uses graph connectivity and bond labels only; it never asks a
+	toolkit to validate valence, so electron-pushing intermediates still receive
+	charges.
 	"""
-	total = 0
+	vertices = list(molecule.vertices)
+	charges = {vertex: float(getFormalCharge(vertex.stringLabel)) for vertex in vertices}
+	params = {vertex: getGasteigerParameters(vertex) for vertex in vertices}
 
-	for iteration in range(1,7):
-		neighbors_of_higher_electronegativity, neighbors_of_lower_electronegativity = seperateNeighbors(vertex.incidentEdges)
+	for iteration in range(iterations):
+		damping = 0.5 ** (iteration + 1)
+		updates = {vertex: 0.0 for vertex in vertices}
 
-		sum = 0
-		for neighbor in neighbors_of_higher_electronegativity:
-			ion_potential = getIonPotential(vertex.stringLabel) / 0.75
-			difference_in_electronegativity = getElectronegativity(neighbor.stringLabel) - getElectronegativity(vertex.stringLabel)
-			sum += (1/ion_potential) * difference_in_electronegativity
+		for edge in molecule.edges:
+			source = edge.source
+			target = edge.target
+			chi_source = getOrbitalElectronegativity(params[source], charges[source])
+			chi_target = getOrbitalElectronegativity(params[target], charges[target])
+			chi_diff = chi_target - chi_source
+			if chi_diff == 0:
+				continue
 
-		for neighbor in neighbors_of_lower_electronegativity:
-			ion_potential = getIonPotential(neighbor.stringLabel) / 0.75
-			difference_in_electronegativity = getElectronegativity(neighbor.stringLabel) - getElectronegativity(vertex.stringLabel)
-			sum += (1/ion_potential) * difference_in_electronegativity
+			donor = source if chi_diff > 0 else target
+			acceptor = target if chi_diff > 0 else source
+			denominator = max(params[donor].chi_positive, params[acceptor].chi_positive)
+			if denominator == 0:
+				continue
+			transfer = damping * (abs(chi_diff) / denominator)
+			updates[donor] += transfer
+			updates[acceptor] -= transfer
 
-		sum *= 0.5**(iteration-1)
-		total += sum
-	charge = 0
-	if "+" in vertex.stringLabel:
-		charge = 1
-	if "-" in vertex.stringLabel:
-		charge = -1
-	total += charge
-	return total
+		for vertex, update in updates.items():
+			charges[vertex] += update
 
-def getElectronegativity(label):
+	return {
+		str(vertex.id): round(charges[vertex], PARTIAL_CHARGE_DECIMALS)
+		for vertex in vertices
+	}
+
+def splitAtomLabel(label):
 	"""
-	Finds the given Electronegativity for a given atomic symbol.
-	-----
-	Takes an atomic label as an argument and returns the associated electronnegativity.
-	During the process it removes any charge indication from the label string eg.: "+" or "-"
+	Return (element symbol, formal charge) for direct labels like C, O1-, O-, N2+.
 	"""
-	sum = electronegativity[label.replace("1-", "").replace("1+", "")]
-	return sum
+	match = re.fullmatch(r"([A-Za-z][a-z]?)(?:(\d*)([+-]))?", label)
+	if not match:
+		raise KeyError(label)
+	element, magnitude, sign = match.groups()
+	if sign is None:
+		return element, 0
+	charge = int(magnitude) if magnitude != "" else 1
+	if sign == "-":
+		charge *= -1
+	return element, charge
 
-def getIonPotential(label):
-	"""
-	Finds the matching Ion Potential for a given atomic symbol.
-	-----
-	Takes an atomic label as an argument and returns the associated ion potential.
-	During the process it removes any charge indication from the label string eg.: "+" or "-"
-	"""
-	return ionPotential[label.replace("1-", "").replace("1+", "")]
+def getFormalCharge(label):
+	return splitAtomLabel(label)[1]
 
-def seperateNeighbors(edges):
-	"""
-	Seperates the nighbors of a vertex into lower and higher electronnegativity lists.
-	-----
-	Takes a range of incident edges from a mod vertex as an argument.
-	Returns two lists of vertex id's, one with id's of vertices with higher electronegativity, and and one with id's of vertices with lower electronegativity.
-	"""
-	lower_electronegativity_neighbors = []
-	higher_electronegativity_neighbors = []
-	for edge in edges:
-		if getElectronegativity(edge.target.stringLabel) < getElectronegativity(edge.source.stringLabel):
-			if edge.stringLabel == "=":
-				lower_electronegativity_neighbors.append(edge.target)
-			lower_electronegativity_neighbors.append(edge.target)
-		elif getElectronegativity(edge.target.stringLabel) > getElectronegativity(edge.source.stringLabel):
-			if edge.stringLabel == "=":
-				higher_electronegativity_neighbors.append(edge.target)
-			higher_electronegativity_neighbors.append(edge.target)
-		else:
-			continue
-	return higher_electronegativity_neighbors, lower_electronegativity_neighbors
+def getAtomSymbol(label):
+	return splitAtomLabel(label)[0]
 
-electronegativity = {
-	"H": 2.20,
-	"C": 2.55,
-	"O": 3.44,
-	"N": 3.04,
-	"P": 2.19,
-	"Cl": 3.16,
-	"Br": 2.96,
-	"F": 3.98,
-	"Si": 1.90,
-	"I": 2.66,
-}
+class GasteigerParameters:
+	def __init__(self, a, b, c):
+		self.a = a
+		self.b = b
+		self.c = c
+		self.chi_positive = a + b + c
 
-ionPotential = {
-	"H": 13.59,
-	"C": 11.26,
-	"O": 13.61,
-	"N": 14.53,
-	"P": 10.48,
-	"Cl": 13.01,
-	"Br": 11.84,
-	"F": 17.42,
-	"Si": 8.15,
-	"I": 10.45,
+def getOrbitalElectronegativity(params, charge):
+	return params.a + params.b * charge + params.c * charge * charge
+
+def getGasteigerParameters(vertex):
+	element = getAtomSymbol(vertex.stringLabel)
+	mode = getGasteigerMode(vertex)
+	params = gasteigerParameters.get((element, mode))
+	if params is None:
+		params = gasteigerParameters.get((element, "*"))
+	if params is None:
+		raise KeyError("No Gasteiger parameters for atom label %s in mode %s" % (vertex.stringLabel, mode))
+	return params
+
+def getGasteigerMode(vertex):
+	max_order = 1
+	for edge in vertex.incidentEdges:
+		max_order = max(max_order, int(getBondOrder(edge.stringLabel)))
+	if max_order >= 3:
+		return "sp"
+	if max_order == 2:
+		return "sp2"
+	return "sp3"
+
+def getBondOrder(label):
+	if label == "-":
+		return 1
+	if label == "=":
+		return 2
+	if label == "#":
+		return 3
+	return 1
+
+gasteigerParameters = {
+	("H", "*"): GasteigerParameters(7.17, 6.24, -0.56),
+	("C", "sp3"): GasteigerParameters(7.98, 9.18, 1.88),
+	("C", "sp2"): GasteigerParameters(8.79, 9.32, 1.51),
+	("C", "sp"): GasteigerParameters(10.39, 9.45, 0.73),
+	("N", "sp3"): GasteigerParameters(11.54, 10.82, 1.36),
+	("N", "sp2"): GasteigerParameters(12.87, 11.15, 0.85),
+	("N", "sp"): GasteigerParameters(15.68, 11.70, -0.27),
+	("O", "sp3"): GasteigerParameters(14.18, 12.92, 1.39),
+	("O", "sp2"): GasteigerParameters(17.07, 13.79, 0.47),
+	("F", "*"): GasteigerParameters(14.66, 13.85, 2.31),
+	("Cl", "*"): GasteigerParameters(11.00, 9.69, 1.35),
+	("Br", "*"): GasteigerParameters(10.08, 8.47, 1.16),
+	("I", "*"): GasteigerParameters(9.90, 7.96, 0.96),
 }
 
 def isRealisable(s: mod.hyperflow.Solution) -> bool:
