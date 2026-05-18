@@ -7,7 +7,6 @@ old_summaries*/
 pdfs*/
 figures*/
 DG_dumps/
-test*.py
 *plots*.py
 *.zip
 *.txt
