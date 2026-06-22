@@ -943,7 +943,7 @@ class Instance:
 		flow = flowData.flow
 		flow.addEnumerationVar(mod.isEdgeUsed)
 
-		flow.findSolutions(verbosity=1, maxNumSolutions=1)
+		flow.findSolutions(verbosity=1, maxNumSolutions=5)
 		flow.solutions.list()
 		
 		timeFlow = time.perf_counter()
